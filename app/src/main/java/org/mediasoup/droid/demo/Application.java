@@ -11,6 +11,5 @@ public class Application extends android.app.Application {
 
     Logger.setLogLevel(Logger.LogLevel.LOG_TRACE);
     Logger.setDefaultHandler();
-    MediasoupClient.initialize(getApplicationContext());
   }
 }

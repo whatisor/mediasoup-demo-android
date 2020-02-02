@@ -6,7 +6,9 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.preference.PreferenceManager;
+import android.provider.MediaStore;
 import android.text.TextUtils;
+import android.util.Log;
 
 import androidx.annotation.MainThread;
 import androidx.annotation.NonNull;
@@ -28,6 +30,8 @@ import org.protoojs.droid.Message;
 import org.protoojs.droid.ProtooException;
 import org.webrtc.AudioTrack;
 import org.webrtc.CameraVideoCapturer;
+import org.webrtc.VideoFrame;
+import org.webrtc.VideoSink;
 import org.webrtc.VideoTrack;
 
 import java.util.HashMap;
@@ -75,6 +79,7 @@ public class RoomClient extends RoomMessageHandler {
   private SendTransport mSendTransport;
   // mediasoup Transport for receiving.
   private RecvTransport mRecvTransport;
+  //private PlainRTCTransport mRecvTransport;
   // Local Audio Track for mic.
   private AudioTrack mLocalAudioTrack;
   // Local mic mediasoup Producer.
@@ -96,6 +101,9 @@ public class RoomClient extends RoomMessageHandler {
   private CompositeDisposable mCompositeDisposable = new CompositeDisposable();
   // Share preferences
   private SharedPreferences mPreferences;
+
+  //External rendering //FIXME private
+  public VideoSink frameChecker = null;
 
   public RoomClient(
       Context context, RoomStore roomStore, String roomId, String peerId, String displayName) {
@@ -912,10 +920,13 @@ public class RoomClient extends RoomMessageHandler {
       String id = data.optString("id");
       String kind = data.optString("kind");
       String rtpParameters = data.optString("rtpParameters");
+      JSONObject rtpParametersJSON = new JSONObject(rtpParameters);
+      Log.d(TAG,"headerExtensions "+rtpParametersJSON.getString("headerExtensions"));
       String type = data.optString("type");
       String appData = data.optString("appData");
       boolean producerPaused = data.optBoolean("producerPaused");
 
+      Log.d(TAG,"onNewConsumer "+producerId+" rtpParameters "+rtpParameters.toString());
       Consumer consumer =
           mRecvTransport.consume(
               c -> {
@@ -931,6 +942,16 @@ public class RoomClient extends RoomMessageHandler {
       mConsumers.put(consumer.getId(), new ConsumerHolder(peerId, consumer));
       mStore.addConsumer(peerId, type, consumer, producerPaused);
 
+      Log.d(TAG,"onNewConsumer " + consumer.getTrack().kind());
+      if(consumer.getTrack() != null && consumer.getTrack().kind().indexOf("video")>=0) {
+        Log.d(TAG,"onNewConsumer addSink " + consumer.getId());
+        VideoTrack video = (VideoTrack)consumer.getTrack();
+        if(frameChecker != null)
+          video.addSink(frameChecker);
+        else{
+          Log.d(TAG,"frameChecker is null");
+        }
+      }
       // We are ready. Answer the protoo request so the server will
       // resume this Consumer (which was paused for now if video).
       handler.accept();
