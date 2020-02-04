@@ -137,41 +137,44 @@ public class RoomActor {
             Log.d("RenderCallback", "render frame getRotatedWidth" + videoFrame.getRotatedWidth());
             //data prepare
             //extract frame data
-            VideoFrame.I420Buffer i420 = videoFrame.getBuffer().toI420();
-            ByteBuffer y = i420.getDataY();
-            ByteBuffer u = i420.getDataU();
-            ByteBuffer v = i420.getDataV();
-            int width = i420.getWidth();
-            int height = i420.getHeight();
-            synchronized (locker) {
-                int n = width * height;
-                if (RoomActor.currentFrame.length != n * 3) {
-                    RoomActor.currentFrame = new byte[n * 3];
-                }
-                RoomActor.width = width;
-                RoomActor.height = height;
-                //Log.d(TAG, "renderFrame  frame.yuvPlanes[0] " + y.capacity());
-                //Log.d(TAG, "renderFrame  frame.yuvPlanes[1] " + u.capacity());
-                //Log.d(TAG, "renderFrame  frame.yuvPlanes[2] " + v.capacity());
+            if(true) {
+                VideoFrame.I420Buffer i420 = videoFrame.getBuffer().toI420();
+                ByteBuffer y = i420.getDataY();
+                ByteBuffer u = i420.getDataU();
+                ByteBuffer v = i420.getDataV();
+                int width = i420.getWidth();
+                int height = i420.getHeight();
+                synchronized (locker) {
+                    int n = width * height;
+                    if (RoomActor.currentFrame.length != n * 3) {
+                        RoomActor.currentFrame = new byte[n * 3];
+                    }
+                    RoomActor.width = width;
+                    RoomActor.height = height;
+                    //Log.d(TAG, "renderFrame  frame.yuvPlanes[0] " + y.capacity());
+                    //Log.d(TAG, "renderFrame  frame.yuvPlanes[1] " + u.capacity());
+                    //Log.d(TAG, "renderFrame  frame.yuvPlanes[2] " + v.capacity());
 
-                //cpu conversion
-                if(true) {
-                    for (int i = 0; i < height; i++) {
-                        for (int j = 0; j < width; j++) {
-                            int index = i * width + j;
-                            //color.fromYUV(y.get(index) & 0xff, u.get((i / 2) * width / 2 + j / 2) & 0xff,
-                             //      v.get((i / 2) * width / 2 + j / 2) & 0xff);
-                            RoomActor.currentFrame[index * 3] = y.get(index);//(byte) color.r;
-                            RoomActor.currentFrame[index * 3 + 1] = u.get((i / 2) * width / 2 + j / 2);//(byte) color.g;
-                            RoomActor.currentFrame[index * 3 + 2] = v.get((i / 2) * width / 2 + j / 2);///(byte) color.b;
+                    //cpu conversion
+                    if (true) {
+                        for (int i = 0; i < height; i++) {
+                            for (int j = 0; j < width; j++) {
+                                int index = i * width + j;
+                                //color.fromYUV(y.get(index) & 0xff, u.get((i / 2) * width / 2 + j / 2) & 0xff,
+                                //      v.get((i / 2) * width / 2 + j / 2) & 0xff);
+                                RoomActor.currentFrame[index * 3] = y.get(index);//(byte) color.r;
+                                RoomActor.currentFrame[index * 3 + 1] = u.get((i / 2) * width / 2 + j / 2);//(byte) color.g;
+                                RoomActor.currentFrame[index * 3 + 2] = v.get((i / 2) * width / 2 + j / 2);///(byte) color.b;
+                            }
+
                         }
 
-                    }
-                }
-                else{//gpu conversion
-                    //Bitmap bmp = BitmapFactory.
-                    //gpuImage.setImage(bitmap);
+                        RoomActor.isUsed = false;
+                    } else {//gpu conversion
+                        //Bitmap bmp = BitmapFactory.
+                        //gpuImage.setImage(bitmap);
 
+                    }
                 }
             }
 
@@ -182,13 +185,16 @@ public class RoomActor {
     static public byte[] currentFrame = new byte[width * height * 3];
     static public byte[] currentFrameTmp = new byte[width * height * 3];
     static public Object locker = new Object();
+    static public boolean isUsed = false;
 
 
     //public interface
     public static byte[] getFrame() {
         Log.d("RenderCallback", "getFrame");
         synchronized (locker) {
+            if(RoomActor.isUsed)return null;
             currentFrameTmp = currentFrame.clone();
+            RoomActor.isUsed = true;
         }
         return currentFrameTmp;
     }
