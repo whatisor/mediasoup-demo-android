@@ -30,6 +30,7 @@ import org.protoojs.droid.Message;
 import org.protoojs.droid.ProtooException;
 import org.webrtc.AudioTrack;
 import org.webrtc.CameraVideoCapturer;
+import org.webrtc.MediaCodecVideoDecoder;
 import org.webrtc.VideoFrame;
 import org.webrtc.VideoSink;
 import org.webrtc.VideoTrack;
@@ -946,8 +947,13 @@ public class RoomClient extends RoomMessageHandler {
       if(consumer.getTrack() != null && consumer.getTrack().kind().indexOf("video")>=0) {
         Log.d(TAG,"onNewConsumer addSink " + consumer.getId());
         VideoTrack video = (VideoTrack)consumer.getTrack();
-        if(frameChecker != null)
+        if(frameChecker != null) {
+          Log.d(TAG,"MediaCodecVideoDecoder.isVp8HwSupported() "+MediaCodecVideoDecoder.isVp8HwSupported());
+          Log.d(TAG,"MediaCodecVideoDecoder.isH264HwSupported() "+MediaCodecVideoDecoder.isH264HwSupported());
+          Log.d(TAG,"MediaCodecVideoDecoder.isVp9HwSupported() "+MediaCodecVideoDecoder.isVp9HwSupported());
+          Log.d(TAG,"MediaCodecVideoDecoder.isH264HighProfileHwSupported() "+MediaCodecVideoDecoder.isH264HighProfileHwSupported());
           video.addSink(frameChecker);
+        }
         else{
           Log.d(TAG,"frameChecker is null");
         }

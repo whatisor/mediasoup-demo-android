@@ -21,6 +21,9 @@ import org.webrtc.VideoFrame;
 import org.webrtc.VideoSink;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.Queue;
 
 import jp.co.cyberagent.android.gpuimage.GPUImage;
 import jp.co.cyberagent.android.gpuimage.filter.GPUImageRGBFilter;
@@ -114,6 +117,7 @@ public class RoomActor {
 
     //Unity interface
     private class RenderCallback implements VideoSink {
+        final private int MAX_BUFFER = 10;
         RGBColor color = new RGBColor();
         private class RGBColor {
             public int r, g, b;
@@ -134,7 +138,7 @@ public class RoomActor {
 
         @Override
         public void onFrame(VideoFrame videoFrame) {
-            Log.d("RenderCallback", "render frame getRotatedWidth" + videoFrame.getRotatedWidth());
+            //Log.d("RenderCallback", "render frame getRotatedWidth" + videoFrame.getRotatedWidth());
             //data prepare
             //extract frame data
             if(true) {
@@ -144,7 +148,8 @@ public class RoomActor {
                 ByteBuffer v = i420.getDataV();
                 int width = i420.getWidth();
                 int height = i420.getHeight();
-                synchronized (locker) {
+                //synchronized (locker)
+                {
                     int n = width * height;
                     if (RoomActor.currentFrame.length != n * 3) {
                         RoomActor.currentFrame = new byte[n * 3];
@@ -169,7 +174,11 @@ public class RoomActor {
 
                         }
 
-                        RoomActor.isUsed = false;
+                        while(queue.size() > MAX_BUFFER){
+                            queue.pop();
+                        }
+                        queue.push(RoomActor.currentFrame);
+                        //Log.d("RenderCallback ","" +queue.size());
                     } else {//gpu conversion
                         //Bitmap bmp = BitmapFactory.
                         //gpuImage.setImage(bitmap);
@@ -184,6 +193,7 @@ public class RoomActor {
     static public int width = 1, height = 1;
     static public byte[] currentFrame = new byte[width * height * 3];
     static public byte[] currentFrameTmp = new byte[width * height * 3];
+    static public LinkedList<byte[]> queue = new LinkedList<>();
     static public Object locker = new Object();
     static public boolean isUsed = false;
 
@@ -191,10 +201,10 @@ public class RoomActor {
     //public interface
     public static byte[] getFrame() {
         Log.d("RenderCallback", "getFrame");
-        synchronized (locker) {
-            if(RoomActor.isUsed)return null;
-            currentFrameTmp = currentFrame.clone();
-            RoomActor.isUsed = true;
+        //synchronized (locker)
+        {
+            if(queue.isEmpty())return null;
+            currentFrameTmp = queue.pop().clone();
         }
         return currentFrameTmp;
     }
