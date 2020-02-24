@@ -3,8 +3,6 @@ package org.mediasoup.droid.demo;
 import android.Manifest;
 import android.app.Activity;
 import android.content.SharedPreferences;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.preference.PreferenceManager;
 import android.util.Log;
 
@@ -13,7 +11,6 @@ import com.nabinbhandari.android.permissions.Permissions;
 
 import org.mediasoup.droid.Logger;
 import org.mediasoup.droid.MediasoupClient;
-import org.mediasoup.droid.lib.GPUImageI420RGBFilter;
 import org.mediasoup.droid.lib.RoomClient;
 import org.mediasoup.droid.lib.RoomOptions;
 import org.mediasoup.droid.lib.lv.RoomStore;
@@ -21,13 +18,9 @@ import org.webrtc.VideoFrame;
 import org.webrtc.VideoSink;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.LinkedList;
-import java.util.Queue;
 
 import jp.co.cyberagent.android.gpuimage.GPUImage;
-import jp.co.cyberagent.android.gpuimage.filter.GPUImageRGBFilter;
-import jp.co.cyberagent.android.gpuimage.filter.GPUImageTransformFilter;
 
 public class RoomActor {
     private static final String TAG = RoomActor.class.getSimpleName();
@@ -39,12 +32,11 @@ public class RoomActor {
     private RoomClient mRoomClient;
     private Activity context;
 
-    private GPUImage gpuImage;
-
-    public RoomActor(Activity context) {
+    public RoomActor(Activity context,String roomID) {
         this.context = context;
 
         MediasoupClient.initialize(context);
+        mRoomId = roomID;
         loadRoomConfig();
         initRoomClient();
         //checkPermission();
@@ -59,7 +51,7 @@ public class RoomActor {
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this.context);
 
         // Room initial config.
-        mRoomId = "immertec";//preferences.getString("roomId", "");
+       // mRoomId = "immertec";//preferences.getString("roomId", "");
         mPeerId = "huong";
         mDisplayName = "huong";
         mForceH264 = false;
@@ -138,7 +130,7 @@ public class RoomActor {
 
         @Override
         public void onFrame(VideoFrame videoFrame) {
-            //Log.d("RenderCallback", "render frame getRotatedWidth" + videoFrame.getRotatedWidth());
+            Log.d("RenderCallback", "render frame getRotatedWidth" + videoFrame.getRotatedWidth());
             //data prepare
             //extract frame data
             if(true) {

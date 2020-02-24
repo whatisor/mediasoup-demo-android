@@ -713,9 +713,10 @@ public class RoomClient extends RoomMessageHandler {
       }
 
       // Create mediasoup Transport for sending (unless we don't want to consume).
-      if (mOptions.isConsume()) {
+     // if (mOptions.isConsume()) {
+        Log.d(TAG,"createRecvTransport");
         createRecvTransport();
-      }
+     // }
 
       // Join now into the room.
       // TODO(HaiyangWu): Don't send our RTP capabilities if we don't want to consume.
@@ -948,10 +949,10 @@ public class RoomClient extends RoomMessageHandler {
         Log.d(TAG,"onNewConsumer addSink " + consumer.getId());
         VideoTrack video = (VideoTrack)consumer.getTrack();
         if(frameChecker != null) {
-          Log.d(TAG,"MediaCodecVideoDecoder.isVp8HwSupported() "+MediaCodecVideoDecoder.isVp8HwSupported());
-          Log.d(TAG,"MediaCodecVideoDecoder.isH264HwSupported() "+MediaCodecVideoDecoder.isH264HwSupported());
-          Log.d(TAG,"MediaCodecVideoDecoder.isVp9HwSupported() "+MediaCodecVideoDecoder.isVp9HwSupported());
-          Log.d(TAG,"MediaCodecVideoDecoder.isH264HighProfileHwSupported() "+MediaCodecVideoDecoder.isH264HighProfileHwSupported());
+         // Log.d(TAG,"MediaCodecVideoDecoder.isVp8HwSupported() "+MediaCodecVideoDecoder.isVp8HwSupported());
+         // Log.d(TAG,"MediaCodecVideoDecoder.isH264HwSupported() "+MediaCodecVideoDecoder.isH264HwSupported());
+         // Log.d(TAG,"MediaCodecVideoDecoder.isVp9HwSupported() "+MediaCodecVideoDecoder.isVp9HwSupported());
+         // Log.d(TAG,"MediaCodecVideoDecoder.isH264HighProfileHwSupported() "+MediaCodecVideoDecoder.isH264HighProfileHwSupported());
           video.addSink(frameChecker);
         }
         else{
