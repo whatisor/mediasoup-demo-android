@@ -6,8 +6,6 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.preference.PreferenceManager;
-import android.provider.MediaStore;
-import android.text.TextUtils;
 import android.util.Log;
 
 import androidx.annotation.MainThread;
@@ -30,14 +28,9 @@ import org.protoojs.droid.Message;
 import org.protoojs.droid.ProtooException;
 import org.webrtc.AudioTrack;
 import org.webrtc.CameraVideoCapturer;
-import org.webrtc.MediaCodecVideoDecoder;
-import org.webrtc.VideoFrame;
 import org.webrtc.VideoSink;
 import org.webrtc.VideoTrack;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -68,8 +61,6 @@ public class RoomClient extends RoomMessageHandler {
   private final @NonNull RoomOptions mOptions;
   // Display name.
   private String mDisplayName;
-  // TODO(Haiyangwu):Next expected dataChannel test number.
-  private long mNextDataChannelTestNumber;
   // Protoo URL.
   private String mProtooUrl;
   // mProtoo-client Protoo instance.
@@ -314,7 +305,7 @@ public class RoomClient extends RoomMessageHandler {
     mStore.setAudioOnlyInProgress(true);
 
     if (mCamProducer != null && mOptions.isProduce()) {
-      enableCam();
+      //enableCam();
     }
     mWorkHandler.post(
         () -> {
@@ -705,7 +696,8 @@ public class RoomClient extends RoomMessageHandler {
       mMediasoupDevice = new Device();
       String routerRtpCapabilities = mProtoo.syncRequest("getRouterRtpCapabilities");
       mMediasoupDevice.load(routerRtpCapabilities);
-      String rtpCapabilities = mMediasoupDevice.getRtpCapabilities();
+      String rtpCapabilities =  mMediasoupDevice.getRtpCapabilities();
+      Log.d(TAG,"createRecvTransport  routerRtpCapabilities "+routerRtpCapabilities);
 
       // Create mediasoup Transport for sending (unless we don't want to produce).
       if (mOptions.isProduce()) {
@@ -714,7 +706,7 @@ public class RoomClient extends RoomMessageHandler {
 
       // Create mediasoup Transport for sending (unless we don't want to consume).
      // if (mOptions.isConsume()) {
-        Log.d(TAG,"createRecvTransport");
+        Log.d(TAG,"createRecvTransport rtpCapabilities "+rtpCapabilities);
         createRecvTransport();
      // }
 
@@ -746,8 +738,8 @@ public class RoomClient extends RoomMessageHandler {
         boolean canSendMic = mMediasoupDevice.canProduce("audio");
         boolean canSendCam = mMediasoupDevice.canProduce("video");
         mStore.setMediaCapabilities(canSendMic, canSendCam);
-        mWorkHandler.post(this::enableMic);
-        mWorkHandler.post(this::enableCam);
+       // mWorkHandler.post(this::enableMic);
+       // mWorkHandler.post(this::enableCam);
       }
     } catch (Exception e) {
       e.printStackTrace();
@@ -976,6 +968,7 @@ public class RoomClient extends RoomMessageHandler {
 
   private void onNewDataConsumer(Message.Request request, Protoo.ServerRequestHandler handler) {
     handler.reject(403, "I do not want to data consume");
+    Logger.d(TAG, "onNewDataConsumer() " + request.toString());
     // TODO(HaiyangWu): support data consume
   }
 

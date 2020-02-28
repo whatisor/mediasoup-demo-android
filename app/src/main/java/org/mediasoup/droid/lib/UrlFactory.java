@@ -12,7 +12,7 @@ import javax.net.ssl.X509TrustManager;
 
 public class UrlFactory {
 
-  private static  String HOSTNAME = "192.168.16.117";//"v3demo.mediasoup.org";
+  private static  String HOSTNAME = "v3demo.mediasoup.org";
 
   //for debug
   public static void setHOSTNAME(String address,int port){

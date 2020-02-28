@@ -35,6 +35,8 @@ public class RoomActor {
     public RoomActor(Activity context,String roomID) {
         this.context = context;
 
+        Logger.setLogLevel(Logger.LogLevel.LOG_WARN);
+        Logger.setDefaultHandler();
         MediasoupClient.initialize(context);
         mRoomId = roomID;
         loadRoomConfig();
@@ -109,7 +111,7 @@ public class RoomActor {
 
     //Unity interface
     private class RenderCallback implements VideoSink {
-        final private int MAX_BUFFER = 10;
+        final private int MAX_BUFFER = 3;
         RGBColor color = new RGBColor();
         private class RGBColor {
             public int r, g, b;
@@ -143,7 +145,7 @@ public class RoomActor {
                 //synchronized (locker)
                 {
                     int n = width * height;
-                    if (RoomActor.currentFrame.length != n * 3) {
+                    if (RoomActor.currentFrame.length < n * 3) {
                         RoomActor.currentFrame = new byte[n * 3];
                     }
                     RoomActor.width = width;
@@ -178,6 +180,7 @@ public class RoomActor {
                     }
                 }
             }
+            videoFrame.release();
 
         }
     }
@@ -196,7 +199,7 @@ public class RoomActor {
         //synchronized (locker)
         {
             if(queue.isEmpty())return null;
-            currentFrameTmp = queue.pop().clone();
+            currentFrameTmp = queue.pop();
         }
         return currentFrameTmp;
     }
