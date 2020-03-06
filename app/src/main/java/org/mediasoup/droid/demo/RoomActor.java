@@ -61,7 +61,7 @@ public class RoomActor {
 
 
         // Room action config.
-        mOptions.setProduce(false);
+        mOptions.setProduce(true);
         mOptions.setConsume(true);
         mOptions.setForceTcp(false);
 
@@ -132,7 +132,7 @@ public class RoomActor {
 
         @Override
         public void onFrame(VideoFrame videoFrame) {
-            Log.d("RenderCallback", "render frame getRotatedWidth" + videoFrame.getRotatedWidth());
+            //Log.d("RenderCallback", "render frame getRotatedWidth" + videoFrame.getRotatedWidth());
             //data prepare
             //extract frame data
             if(true) {
@@ -195,7 +195,7 @@ public class RoomActor {
 
     //public interface
     public static byte[] getFrame() {
-        Log.d("RenderCallback", "getFrame");
+        //Log.d("RenderCallback", "getFrame");
         //synchronized (locker)
         {
             if(queue.isEmpty())return null;

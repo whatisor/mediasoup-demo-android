@@ -736,9 +736,9 @@ public class RoomClient extends RoomMessageHandler {
       // Enable mic/webcam.
       if (mOptions.isProduce()) {
         boolean canSendMic = mMediasoupDevice.canProduce("audio");
-        boolean canSendCam = mMediasoupDevice.canProduce("video");
+        boolean canSendCam = false;//NOT USE//mMediasoupDevice.canProduce("video");
         mStore.setMediaCapabilities(canSendMic, canSendCam);
-       // mWorkHandler.post(this::enableMic);
+       mWorkHandler.post(this::enableMic);
        // mWorkHandler.post(this::enableCam);
       }
     } catch (Exception e) {
