@@ -2,9 +2,14 @@ package org.mediasoup.droid.demo;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.Context;
 import android.content.SharedPreferences;
+import android.database.ContentObserver;
+import android.media.AudioManager;
+import android.os.Handler;
 import android.preference.PreferenceManager;
 import android.util.Log;
+import android.view.KeyEvent;
 
 import com.nabinbhandari.android.permissions.PermissionHandler;
 import com.nabinbhandari.android.permissions.Permissions;
@@ -32,6 +37,34 @@ public class RoomActor {
     private RoomClient mRoomClient;
     private Activity context;
 
+    //volume change listener
+    private AudioContentObserver audioContentObserver = null;
+
+    public class AudioContentObserver extends ContentObserver {
+        private AudioManager audioManager;
+
+        public AudioContentObserver(Context context, Handler handler) {
+            super(handler);
+            audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+        }
+
+        @Override
+        public boolean deliverSelfNotifications() {
+            return false;
+        }
+
+        @Override
+        public void onChange(boolean selfChange) {
+            int currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+
+            Log.d(TAG, "Volume now " + currentVolume);
+            if(mRoomClient.getAudioTrack() != null){
+                mRoomClient.getAudioTrack().setVolume(currentVolume);
+            }
+        }
+    }
+
+
     public RoomActor(Activity context,String roomID) {
         this.context = context;
 
@@ -47,6 +80,11 @@ public class RoomActor {
 //        gpuImage = new GPUImage(this.context);
 //        GPUImageI420RGBFilter transform = new GPUImageI420RGBFilter();
 //        gpuImage.setFilter(transform);
+
+        //additional control
+        //volume
+        audioContentObserver = new AudioContentObserver(context,null);
+        context.getApplicationContext().getContentResolver().registerContentObserver(android.provider.Settings.System.CONTENT_URI, true, audioContentObserver );
     }
 
     private void loadRoomConfig() {
@@ -103,6 +141,10 @@ public class RoomActor {
 
     public void onDestroy() {
         if (mRoomClient != null) {
+
+            //remove volume change listener
+            if(audioContentObserver != null)
+            context.getApplicationContext().getContentResolver().unregisterContentObserver(audioContentObserver);
             mRoomClient.close();
             mRoomClient.dispose();
         }

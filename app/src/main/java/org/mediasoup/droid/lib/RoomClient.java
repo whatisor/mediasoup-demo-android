@@ -6,6 +6,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.preference.PreferenceManager;
+import android.provider.MediaStore;
 import android.util.Log;
 
 import androidx.annotation.MainThread;
@@ -96,6 +97,13 @@ public class RoomClient extends RoomMessageHandler {
 
   //External rendering //FIXME private
   public VideoSink frameChecker = null;
+
+  //Additional control for audio consumer
+  private AudioTrack audioTrack = null;
+
+  public  AudioTrack getAudioTrack(){
+    return audioTrack;
+  }
 
   public RoomClient(
       Context context, RoomStore roomStore, String roomId, String peerId, String displayName) {
@@ -950,6 +958,13 @@ public class RoomClient extends RoomMessageHandler {
         else{
           Log.d(TAG,"frameChecker is null");
         }
+      }
+      //we get audio track to control volume. TODO: Support multiple tracks
+      else if(consumer.getTrack() != null && consumer.getTrack().kind().indexOf("audio")>=0) {
+        audioTrack = (AudioTrack)consumer.getTrack();
+
+        //test
+        //audioTrack.setVolume(0);
       }
       // We are ready. Answer the protoo request so the server will
       // resume this Consumer (which was paused for now if video).
