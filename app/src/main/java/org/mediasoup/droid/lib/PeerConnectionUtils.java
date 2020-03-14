@@ -233,7 +233,7 @@ public class PeerConnectionUtils {
   }
 
   // Audio track creation.
-  @MainThread
+  //@MainThread
   public static AudioTrack createAudioTrack(Context context, String id) {
     Logger.d(TAG, "createAudioTrack()");
     if (mAudioSource == null) {
@@ -252,7 +252,7 @@ public class PeerConnectionUtils {
     return mPeerConnectionFactory.createVideoTrack(id, mVideoSource);
   }
 
-  @MainThread
+  //@MainThread
   public static void dispose() {
     if (mVideoSource != null) {
       mVideoSource.dispose();

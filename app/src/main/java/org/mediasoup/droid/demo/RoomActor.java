@@ -33,7 +33,7 @@ public class RoomActor {
     private boolean mForceH264, mForceVP9;
 
     private RoomOptions mOptions = new RoomOptions();
-    private RoomStore mRoomStore = new RoomStore();
+    private RoomStore mRoomStore = null;//new RoomStore();
     private RoomClient mRoomClient;
     private Activity context;
 
@@ -83,7 +83,7 @@ public class RoomActor {
 
         //additional control
         //volume
-        audioContentObserver = new AudioContentObserver(context,null);
+        audioContentObserver = new AudioContentObserver(context,null);//mRoomClient.getmWorkHandler()
         context.getApplicationContext().getContentResolver().registerContentObserver(android.provider.Settings.System.CONTENT_URI, true, audioContentObserver );
     }
 
@@ -153,7 +153,7 @@ public class RoomActor {
 
     //Unity interface
     private class RenderCallback implements VideoSink {
-        final private int MAX_BUFFER = 3;
+        final private int MAX_BUFFER = 5;
         RGBColor color = new RGBColor();
         private class RGBColor {
             public int r, g, b;
@@ -187,7 +187,7 @@ public class RoomActor {
                 //synchronized (locker)
                 {
                     int n = width * height;
-                    if (RoomActor.currentFrame.length < n * 3) {
+                    if (RoomActor.currentFrame.length != n * 3) {
                         RoomActor.currentFrame = new byte[n * 3];
                     }
                     RoomActor.width = width;
@@ -210,10 +210,11 @@ public class RoomActor {
 
                         }
 
-                        while(queue.size() > MAX_BUFFER){
-                            queue.pop();
-                        }
-                        queue.push(RoomActor.currentFrame);
+                        //while(queue.size() > MAX_BUFFER){
+                        //    queue.pop();
+                        //}
+                        if(queue.size() < MAX_BUFFER)
+                            queue.push(RoomActor.currentFrame);
                         //Log.d("RenderCallback ","" +queue.size());
                     } else {//gpu conversion
                         //Bitmap bmp = BitmapFactory.

@@ -6,10 +6,8 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.preference.PreferenceManager;
-import android.provider.MediaStore;
 import android.util.Log;
 
-import androidx.annotation.MainThread;
 import androidx.annotation.NonNull;
 import androidx.annotation.WorkerThread;
 
@@ -28,7 +26,6 @@ import org.mediasoup.droid.lib.socket.WebSocketTransport;
 import org.protoojs.droid.Message;
 import org.protoojs.droid.ProtooException;
 import org.webrtc.AudioTrack;
-import org.webrtc.CameraVideoCapturer;
 import org.webrtc.VideoSink;
 import org.webrtc.VideoTrack;
 
@@ -41,7 +38,7 @@ import static org.mediasoup.droid.lib.JsonUtils.jsonPut;
 import static org.mediasoup.droid.lib.JsonUtils.toJsonObject;
 
 @SuppressWarnings("WeakerAccess")
-public class RoomClient extends RoomMessageHandler {
+public class RoomClient {
 
   public enum ConnectionState {
     // initial state.
@@ -101,6 +98,8 @@ public class RoomClient extends RoomMessageHandler {
   //Additional control for audio consumer
   private AudioTrack audioTrack = null;
 
+  private static String TAG = "RoomClient";
+
   public  AudioTrack getAudioTrack(){
     return audioTrack;
   }
@@ -129,15 +128,15 @@ public class RoomClient extends RoomMessageHandler {
       boolean forceH264,
       boolean forceVP9,
       RoomOptions options) {
-    super(roomStore);
+    //super(roomStore);
     this.mContext = context.getApplicationContext();
     this.mOptions = options == null ? new RoomOptions() : options;
     this.mDisplayName = displayName;
     this.mClosed = false;
     this.mProtooUrl = UrlFactory.getProtooUrl(roomId, peerId, forceH264, forceVP9);
 
-    this.mStore.setMe(peerId, displayName, this.mOptions.getDevice());
-    this.mStore.setRoomUrl(roomId, UrlFactory.getInvitationLink(roomId, forceH264, forceVP9));
+   // this.mStore.setMe(peerId, displayName, this.mOptions.getDevice());
+   // this.mStore.setRoomUrl(roomId, UrlFactory.getInvitationLink(roomId, forceH264, forceVP9));
     this.mPreferences = PreferenceManager.getDefaultSharedPreferences(this.mContext);
 
     // support for selfSigned cert.
@@ -150,15 +149,19 @@ public class RoomClient extends RoomMessageHandler {
     mMainHandler = new Handler(Looper.getMainLooper());
   }
 
-  @MainThread
+  public Handler getmWorkHandler(){
+    return mWorkHandler;
+  }
+
+  @WorkerThread
   public void join() {
     Logger.d(TAG, "join() " + this.mProtooUrl);
-    mStore.setRoomState(ConnectionState.CONNECTING);
+    //mStore.setRoomState(ConnectionState.CONNECTING);
     WebSocketTransport transport = new WebSocketTransport(mProtooUrl);
     mProtoo = new Protoo(transport, peerListener);
   }
 
-  @MainThread
+  @WorkerThread
   public void enableMic() {
     Logger.d(TAG, "enableMic()");
     if (!mMediasoupDevice.isLoaded()) {
@@ -185,10 +188,10 @@ public class RoomClient extends RoomMessageHandler {
             mLocalAudioTrack,
             null,
             null);
-    mStore.addProducer(mMicProducer);
+    //mStore.addProducer(mMicProducer);
   }
 
-  @MainThread
+  @WorkerThread
   public void disableMic() {
     Logger.d(TAG, "disableMic()");
 
@@ -197,155 +200,52 @@ public class RoomClient extends RoomMessageHandler {
     }
 
     mMicProducer.close();
-    mStore.removeProducer(mMicProducer.getId());
+   // mStore.removeProducer(mMicProducer.getId());
 
     // TODO(HaiyangWu) : await
     mCompositeDisposable.add(
         mProtoo
             .request("closeProducer", req -> jsonPut(req, "producerId", mMicProducer.getId()))
             .subscribe(
-                res -> {},
-                throwable ->
-                    mStore.addNotify("Error closing server-side mic Producer: ", throwable)));
+                res -> {}
+                //,
+                //throwable ->
+                    //mStore.addNotify("Error closing server-side mic Producer: ", throwable)
+                         ));
 
     mMicProducer = null;
   }
 
-  @MainThread
+  @WorkerThread
   public void muteMic() {
     Logger.d(TAG, "muteMic()");
   }
 
-  @MainThread
+  @WorkerThread
   public void unmuteMic() {
     Logger.d(TAG, "unmuteMic()");
     // TODO:
   }
 
-  @MainThread
-  public void enableCam() {
-    Logger.d(TAG, "enableCam()");
-    if (!mMediasoupDevice.isLoaded()) {
-      Logger.w(TAG, "enableCam() | not loaded");
-      return;
-    }
-    if (!mMediasoupDevice.canProduce("video")) {
-      Logger.w(TAG, "enableCam() | cannot produce video");
-      return;
-    }
-    if (mSendTransport == null) {
-      Logger.w(TAG, "enableCam() | mSendTransport doesn't ready");
-      return;
-    }
-    if (mLocalVideoTrack == null) {
-      mLocalVideoTrack = PeerConnectionUtils.createVideoTrack(mContext, "cam");
-      mLocalVideoTrack.setEnabled(true);
-    }
-    mCamProducer =
-        mSendTransport.produce(
-            producer -> {
-              Logger.e(TAG, "onTransportClose(), camProducer");
-            },
-            mLocalVideoTrack,
-            null,
-            null);
-    mStore.addProducer(mCamProducer);
-  }
 
-  @MainThread
-  public void disableCam() {
-    Logger.d(TAG, "disableCam()");
-    // TODO:
-  }
-
-  @MainThread
-  public void changeCam() {
-    Logger.d(TAG, "changeCam()");
-    mStore.setCamInProgress(true);
-    PeerConnectionUtils.switchCam(
-        new CameraVideoCapturer.CameraSwitchHandler() {
-          @Override
-          public void onCameraSwitchDone(boolean b) {
-            mStore.setCamInProgress(false);
-          }
-
-          @Override
-          public void onCameraSwitchError(String s) {
-            Logger.w(TAG, "changeCam() | failed: " + s);
-            mStore.addNotify("error", "Could not change cam: " + s);
-            mStore.setCamInProgress(false);
-          }
-        });
-  }
-
-  @MainThread
-  public void disableShare() {
-    Logger.d(TAG, "disableShare()");
-  }
-
-  @MainThread
-  public void enableShare() {
-    Logger.d(TAG, "enableShare()");
-  }
-
-  @MainThread
-  public void enableAudioOnly() {
-    Logger.d(TAG, "enableAudioOnly()");
-    mStore.setAudioOnlyInProgress(true);
-
-    disableCam();
-    mWorkHandler.post(
-        () -> {
-          for (ConsumerHolder holder : mConsumers.values()) {
-            if (!"video".equals(holder.mConsumer.getKind())) {
-              continue;
-            }
-            pauseConsumer(holder.mConsumer);
-          }
-          mStore.setAudioOnlyState(true);
-          mStore.setAudioOnlyInProgress(false);
-        });
-  }
-
-  @MainThread
-  public void disableAudioOnly() {
-    Logger.d(TAG, "disableAudioOnly()");
-    mStore.setAudioOnlyInProgress(true);
-
-    if (mCamProducer != null && mOptions.isProduce()) {
-      //enableCam();
-    }
-    mWorkHandler.post(
-        () -> {
-          for (ConsumerHolder holder : mConsumers.values()) {
-            if (!"video".equals(holder.mConsumer.getKind())) {
-              continue;
-            }
-            resumeConsumer(holder.mConsumer);
-          }
-          mStore.setAudioOnlyState(false);
-          mStore.setAudioOnlyInProgress(false);
-        });
-  }
-
-  @MainThread
+  @WorkerThread
   public void muteAudio() {
     Logger.d(TAG, "muteAudio()");
     // TODO: Mute/unmute participants\' audio
-    mStore.setAudioMutedState(true);
+   // mStore.setAudioMutedState(true);
   }
 
-  @MainThread
+  @WorkerThread
   public void unmuteAudio() {
     Logger.d(TAG, "unmuteAudio()");
     // TODO: Mute/unmute participants\' audio
-    mStore.setAudioMutedState(false);
+    //mStore.setAudioMutedState(false);
   }
 
-  @MainThread
+  @WorkerThread
   public void restartIce() {
     Logger.d(TAG, "restartIce()");
-    mStore.setRestartIceInProgress(true);
+    //mStore.setRestartIceInProgress(true);
     mWorkHandler.post(
         () -> {
           try {
@@ -364,32 +264,32 @@ public class RoomClient extends RoomMessageHandler {
           } catch (Exception e) {
             e.printStackTrace();
             logError("restartIce() | failed:", e);
-            mStore.addNotify("error", "ICE restart failed: " + e.getMessage());
+           // mStore.addNotify("error", "ICE restart failed: " + e.getMessage());
           }
-          mStore.setRestartIceInProgress(false);
+          //mStore.setRestartIceInProgress(false);
         });
   }
 
-  @MainThread
+  @WorkerThread
   public void setMaxSendingSpatialLayer() {
     Logger.d(TAG, "setMaxSendingSpatialLayer()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void setConsumerPreferredLayers(String spatialLayer) {
     Logger.d(TAG, "setConsumerPreferredLayers()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void setConsumerPreferredLayers(
       String consumerId, String spatialLayer, String temporalLayer) {
     Logger.d(TAG, "setConsumerPreferredLayers()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void requestConsumerKeyFrame(String consumerId) {
     Logger.d(TAG, "requestConsumerKeyFrame()");
     mCompositeDisposable.add(
@@ -397,39 +297,39 @@ public class RoomClient extends RoomMessageHandler {
             .request("requestConsumerKeyFrame", req -> jsonPut(req, "consumerId", "consumerId"))
             .subscribe(
                 (res) -> {
-                  mStore.addNotify("Keyframe requested for video consumer");
+                  //mStore.addNotify("Keyframe requested for video consumer");
                 },
                 e -> {
                   logError("restartIce() | failed:", e);
-                  mStore.addNotify("error", "ICE restart failed: " + e.getMessage());
+                  //mStore.addNotify("error", "ICE restart failed: " + e.getMessage());
                 }));
   }
 
-  @MainThread
+  @WorkerThread
   public void enableChatDataProducer() {
     Logger.d(TAG, "enableChatDataProducer()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void enableBotDataProducer() {
     Logger.d(TAG, "enableBotDataProducer()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void sendChatMessage(String txt) {
     Logger.d(TAG, "sendChatMessage()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void sendBotMessage(String txt) {
     Logger.d(TAG, "sendBotMessage()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void changeDisplayName(String displayName) {
     Logger.d(TAG, "changeDisplayName()");
 
@@ -442,110 +342,110 @@ public class RoomClient extends RoomMessageHandler {
             .subscribe(
                 (res) -> {
                   mDisplayName = displayName;
-                  mStore.setDisplayName(displayName);
-                  mStore.addNotify("Display name change");
+                  //mStore.setDisplayName(displayName);
+                  //mStore.addNotify("Display name change");
                 },
                 e -> {
                   logError("changeDisplayName() | failed:", e);
-                  mStore.addNotify("error", "Could not change display name: " + e.getMessage());
+                  //mStore.addNotify("error", "Could not change display name: " + e.getMessage());
 
                   // We need to refresh the component for it to render the previous
                   // displayName again.
-                  mStore.setDisplayName(mDisplayName);
+                  //mStore.setDisplayName(mDisplayName);
                 }));
   }
 
-  @MainThread
+  @WorkerThread
   public void getSendTransportRemoteStats() {
     Logger.d(TAG, "getSendTransportRemoteStats()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void getRecvTransportRemoteStats() {
     Logger.d(TAG, "getRecvTransportRemoteStats()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void getAudioRemoteStats() {
     Logger.d(TAG, "getAudioRemoteStats()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void getVideoRemoteStats() {
     Logger.d(TAG, "getVideoRemoteStats()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void getConsumerRemoteStats(String consumerId) {
     Logger.d(TAG, "getConsumerRemoteStats()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void getChatDataProducerRemoteStats(String consumerId) {
     Logger.d(TAG, "getChatDataProducerRemoteStats()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void getBotDataProducerRemoteStats() {
     Logger.d(TAG, "getBotDataProducerRemoteStats()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void getDataConsumerRemoteStats(String dataConsumerId) {
     Logger.d(TAG, "getDataConsumerRemoteStats()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void getSendTransportLocalStats() {
     Logger.d(TAG, "getSendTransportLocalStats()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void getRecvTransportLocalStats() {
     Logger.d(TAG, "getRecvTransportLocalStats()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void getAudioLocalStats() {
     Logger.d(TAG, "getAudioLocalStats()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void getVideoLocalStats() {
     Logger.d(TAG, "getVideoLocalStats()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void getConsumerLocalStats(String consumerId) {
     Logger.d(TAG, "getConsumerLocalStats()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void applyNetworkThrottle(String uplink, String downlink, String rtt, String secret) {
     Logger.d(TAG, "applyNetworkThrottle()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void resetNetworkThrottle(boolean silent, String secret) {
     Logger.d(TAG, "applyNetworkThrottle()");
     // TODO:
   }
 
-  @MainThread
+  @WorkerThread
   public void close() {
     if (this.mClosed) {
       return;
@@ -571,7 +471,7 @@ public class RoomClient extends RoomMessageHandler {
       mLocalVideoTrack = null;
     }
 
-    mStore.setRoomState(ConnectionState.CLOSED);
+   // mStore.setRoomState(ConnectionState.CLOSED);
   }
 
   private void closeTransportAndDevice() {
@@ -618,8 +518,8 @@ public class RoomClient extends RoomMessageHandler {
         public void onFail() {
           mWorkHandler.post(
               () -> {
-                mStore.addNotify("error", "WebSocket connection failed");
-                mStore.setRoomState(ConnectionState.CONNECTING);
+               // mStore.addNotify("error", "WebSocket connection failed");
+               // mStore.setRoomState(ConnectionState.CONNECTING);
               });
         }
 
@@ -664,7 +564,7 @@ public class RoomClient extends RoomMessageHandler {
           mWorkHandler.post(
               () -> {
                 try {
-                  handleNotification(notification);
+                  //handleNotification(notification);
                 } catch (Exception e) {
                   Logger.e(TAG, "handleNotification error.", e);
                 }
@@ -675,8 +575,8 @@ public class RoomClient extends RoomMessageHandler {
         public void onDisconnected() {
           mWorkHandler.post(
               () -> {
-                mStore.addNotify("error", "WebSocket disconnected");
-                mStore.setRoomState(ConnectionState.CONNECTING);
+                //mStore.addNotify("error", "WebSocket disconnected");
+                //mStore.setRoomState(ConnectionState.CONNECTING);
 
                 // Close All Transports created by device.
                 // All will reCreated After ReJoin.
@@ -731,28 +631,28 @@ public class RoomClient extends RoomMessageHandler {
                 jsonPut(req, "sctpCapabilities", "");
               });
 
-      mStore.setRoomState(ConnectionState.CONNECTED);
-      mStore.addNotify("You are in the room!", 3000);
+     // mStore.setRoomState(ConnectionState.CONNECTED);
+     // mStore.addNotify("You are in the room!", 3000);
 
       JSONObject resObj = JsonUtils.toJsonObject(joinResponse);
       JSONArray peers = resObj.optJSONArray("peers");
       for (int i = 0; peers != null && i < peers.length(); i++) {
         JSONObject peer = peers.getJSONObject(i);
-        mStore.addPeer(peer.optString("id"), peer);
+        //mStore.addPeer(peer.optString("id"), peer);
       }
 
       // Enable mic/webcam.
       if (mOptions.isProduce()) {
         boolean canSendMic = mMediasoupDevice.canProduce("audio");
         boolean canSendCam = false;//NOT USE//mMediasoupDevice.canProduce("video");
-        mStore.setMediaCapabilities(canSendMic, canSendCam);
+        //mStore.setMediaCapabilities(canSendMic, canSendCam);
        mWorkHandler.post(this::enableMic);
        // mWorkHandler.post(this::enableCam);
       }
     } catch (Exception e) {
       e.printStackTrace();
       logError("joinRoom() failed:", e);
-      mStore.addNotify("error", "Could not join the room: " + e.getMessage());
+      //mStore.addNotify("error", "Could not join the room: " + e.getMessage());
       mMainHandler.post(this::close);
     }
   }
@@ -932,7 +832,7 @@ public class RoomClient extends RoomMessageHandler {
       Consumer consumer =
           mRecvTransport.consume(
               c -> {
-                mConsumers.remove(c.getId());
+               // mConsumers.remove(c.getId());
                 Logger.w(TAG, "onTransportClose for consume");
               },
               id,
@@ -941,8 +841,8 @@ public class RoomClient extends RoomMessageHandler {
               rtpParameters,
               appData);
 
-      mConsumers.put(consumer.getId(), new ConsumerHolder(peerId, consumer));
-      mStore.addConsumer(peerId, type, consumer, producerPaused);
+      //mConsumers.put(consumer.getId(), new ConsumerHolder(peerId, consumer));
+     // mStore.addConsumer(peerId, type, consumer, producerPaused);
 
       Log.d(TAG,"onNewConsumer " + consumer.getTrack().kind());
       if(consumer.getTrack() != null && consumer.getTrack().kind().indexOf("video")>=0) {
@@ -971,13 +871,13 @@ public class RoomClient extends RoomMessageHandler {
       handler.accept();
 
       // If audio-only mode is enabled, pause it.
-      if ("video".equals(consumer.getKind()) && mStore.getMe().getValue().isAudioOnly()) {
-        pauseConsumer(consumer);
-      }
+      //if ("video".equals(consumer.getKind()) && mStore.getMe().getValue().isAudioOnly()) {
+      //  pauseConsumer(consumer);
+     // }
     } catch (Exception e) {
       e.printStackTrace();
       logError("\"newConsumer\" request failed:", e);
-      mStore.addNotify("error", "Error creating a Consumer: " + e.getMessage());
+      //mStore.addNotify("error", "Error creating a Consumer: " + e.getMessage());
     }
   }
 
@@ -997,11 +897,11 @@ public class RoomClient extends RoomMessageHandler {
     try {
       mProtoo.syncRequest("pause" + "", req -> jsonPut(req, "consumerId", consumer.getId()));
       consumer.pause();
-      mStore.setConsumerPaused(consumer.getId(), "local");
+     // mStore.setConsumerPaused(consumer.getId(), "local");
     } catch (Exception e) {
       e.printStackTrace();
       logError("pauseConsumer() | failed:", e);
-      mStore.addNotify("error", "Error pausing Consumer: " + e.getMessage());
+      //mStore.addNotify("error", "Error pausing Consumer: " + e.getMessage());
     }
   }
 
@@ -1015,11 +915,11 @@ public class RoomClient extends RoomMessageHandler {
     try {
       mProtoo.syncRequest("resumeConsumer", req -> jsonPut(req, "consumerId", consumer.getId()));
       consumer.resume();
-      mStore.setConsumerResumed(consumer.getId(), "local");
+      //mStore.setConsumerResumed(consumer.getId(), "local");
     } catch (Exception e) {
       e.printStackTrace();
       logError("resumeConsumer() | failed:", e);
-      mStore.addNotify("error", "Error resuming Consumer: " + e.getMessage());
+      //mStore.addNotify("error", "Error resuming Consumer: " + e.getMessage());
     }
   }
 }

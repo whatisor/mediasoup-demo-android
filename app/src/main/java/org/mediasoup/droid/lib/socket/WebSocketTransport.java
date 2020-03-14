@@ -181,7 +181,7 @@ public class WebSocketTransport extends AbsWebSocketTransport
 
   @Override
   public void onMessage(String payload) {
-    Logger.d(TAG, "onMessage()");
+    //Logger.d(TAG, "onMessage()");
     Message message = Message.parse(payload);
     if (message == null) {
       return;
