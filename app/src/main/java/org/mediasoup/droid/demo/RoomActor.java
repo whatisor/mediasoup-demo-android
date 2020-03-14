@@ -45,7 +45,6 @@ public class RoomActor {
 
         public AudioContentObserver(Context context, Handler handler) {
             super(handler);
-            audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
         }
 
         @Override
@@ -55,6 +54,7 @@ public class RoomActor {
 
         @Override
         public void onChange(boolean selfChange) {
+            audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
             int currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
 
             Log.d(TAG, "Volume now " + currentVolume);
