@@ -3,13 +3,10 @@ package org.mediasoup.droid.demo;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.database.ContentObserver;
 import android.media.AudioManager;
 import android.os.Handler;
-import android.preference.PreferenceManager;
 import android.util.Log;
-import android.view.KeyEvent;
 
 import com.nabinbhandari.android.permissions.PermissionHandler;
 import com.nabinbhandari.android.permissions.Permissions;
@@ -18,14 +15,12 @@ import org.mediasoup.droid.Logger;
 import org.mediasoup.droid.MediasoupClient;
 import org.mediasoup.droid.lib.RoomClient;
 import org.mediasoup.droid.lib.RoomOptions;
-import org.mediasoup.droid.lib.lv.RoomStore;
 import org.webrtc.VideoFrame;
 import org.webrtc.VideoSink;
 
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
 
-import jp.co.cyberagent.android.gpuimage.GPUImage;
 
 public class RoomActor {
     private static final String TAG = RoomActor.class.getSimpleName();
@@ -33,7 +28,6 @@ public class RoomActor {
     private boolean mForceH264, mForceVP9;
 
     private RoomOptions mOptions = new RoomOptions();
-    private RoomStore mRoomStore = null;//new RoomStore();
     private RoomClient mRoomClient;
     private Activity context;
 
@@ -88,8 +82,6 @@ public class RoomActor {
     }
 
     private void loadRoomConfig() {
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this.context);
-
         // Room initial config.
        // mRoomId = "immertec";//preferences.getString("roomId", "");
         mPeerId = "huong";
@@ -112,7 +104,7 @@ public class RoomActor {
         Log.d(TAG,"Room ID " + mRoomId);
         mRoomClient =
                 new RoomClient(
-                        this.context, mRoomStore, mRoomId, mPeerId, mDisplayName, mForceH264, mForceVP9, mOptions);
+                        this.context,  mRoomId, mPeerId, mDisplayName, mForceH264, mForceVP9, mOptions);
         mRoomClient.frameChecker = new RenderCallback();
     }
 
@@ -174,7 +166,7 @@ public class RoomActor {
 
         @Override
         public void onFrame(VideoFrame videoFrame) {
-            //Log.d("RenderCallback", "render frame getRotatedWidth" + videoFrame.getRotatedWidth());
+            Log.d("RenderCallback", "render frame getRotatedWidth" + videoFrame.getRotatedWidth());
             //data prepare
             //extract frame data
             if(true) {

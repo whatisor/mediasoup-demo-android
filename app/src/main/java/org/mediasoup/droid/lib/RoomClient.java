@@ -5,9 +5,9 @@ import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
-import android.preference.PreferenceManager;
 import android.util.Log;
 
+import androidx.annotation.MainThread;
 import androidx.annotation.NonNull;
 import androidx.annotation.WorkerThread;
 
@@ -21,7 +21,6 @@ import org.mediasoup.droid.Producer;
 import org.mediasoup.droid.RecvTransport;
 import org.mediasoup.droid.SendTransport;
 import org.mediasoup.droid.Transport;
-import org.mediasoup.droid.lib.lv.RoomStore;
 import org.mediasoup.droid.lib.socket.WebSocketTransport;
 import org.protoojs.droid.Message;
 import org.protoojs.droid.ProtooException;
@@ -105,23 +104,21 @@ public class RoomClient {
   }
 
   public RoomClient(
-      Context context, RoomStore roomStore, String roomId, String peerId, String displayName) {
-    this(context, roomStore, roomId, peerId, displayName, false, false, null);
+      Context context,  String roomId, String peerId, String displayName) {
+    this(context,  roomId, peerId, displayName, false, false, null);
   }
 
   public RoomClient(
       Context context,
-      RoomStore roomStore,
       String roomId,
       String peerId,
       String displayName,
       RoomOptions options) {
-    this(context, roomStore, roomId, peerId, displayName, false, false, options);
+    this(context, roomId, peerId, displayName, false, false, options);
   }
 
   public RoomClient(
       Context context,
-      RoomStore roomStore,
       String roomId,
       String peerId,
       String displayName,
@@ -137,13 +134,13 @@ public class RoomClient {
 
    // this.mStore.setMe(peerId, displayName, this.mOptions.getDevice());
    // this.mStore.setRoomUrl(roomId, UrlFactory.getInvitationLink(roomId, forceH264, forceVP9));
-    this.mPreferences = PreferenceManager.getDefaultSharedPreferences(this.mContext);
 
     // support for selfSigned cert.
     UrlFactory.enableSelfSignedHttpClient();
 
     // init worker handler.
     HandlerThread handlerThread = new HandlerThread("worker");
+      handlerThread.setPriority(Thread.MAX_PRIORITY);
     handlerThread.start();
     mWorkHandler = new Handler(handlerThread.getLooper());
     mMainHandler = new Handler(Looper.getMainLooper());
@@ -161,7 +158,7 @@ public class RoomClient {
     mProtoo = new Protoo(transport, peerListener);
   }
 
-  @WorkerThread
+  @MainThread
   public void enableMic() {
     Logger.d(TAG, "enableMic()");
     if (!mMediasoupDevice.isLoaded()) {
@@ -646,7 +643,7 @@ public class RoomClient {
         boolean canSendMic = mMediasoupDevice.canProduce("audio");
         boolean canSendCam = false;//NOT USE//mMediasoupDevice.canProduce("video");
         //mStore.setMediaCapabilities(canSendMic, canSendCam);
-       mWorkHandler.post(this::enableMic);
+       mMainHandler.post(this::enableMic);
        // mWorkHandler.post(this::enableCam);
       }
     } catch (Exception e) {
