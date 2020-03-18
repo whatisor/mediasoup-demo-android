@@ -7,7 +7,6 @@ import android.os.HandlerThread;
 import android.os.Looper;
 import android.util.Log;
 
-import androidx.annotation.MainThread;
 import androidx.annotation.NonNull;
 import androidx.annotation.WorkerThread;
 
@@ -158,7 +157,7 @@ public class RoomClient {
     mProtoo = new Protoo(transport, peerListener);
   }
 
-  @MainThread
+  @WorkerThread
   public void enableMic() {
     Logger.d(TAG, "enableMic()");
     if (!mMediasoupDevice.isLoaded()) {
@@ -524,7 +523,7 @@ public class RoomClient {
         public void onRequest(
             @NonNull Message.Request request, @NonNull Protoo.ServerRequestHandler handler) {
           Logger.d(TAG, "onRequest() " + request.getData().toString());
-          mWorkHandler.post(
+          mMainHandler.post(
               () -> {
                 try {
                   switch (request.getMethod()) {
@@ -643,7 +642,7 @@ public class RoomClient {
         boolean canSendMic = mMediasoupDevice.canProduce("audio");
         boolean canSendCam = false;//NOT USE//mMediasoupDevice.canProduce("video");
         //mStore.setMediaCapabilities(canSendMic, canSendCam);
-       mMainHandler.post(this::enableMic);
+       mWorkHandler.post(this::enableMic);
        // mWorkHandler.post(this::enableCam);
       }
     } catch (Exception e) {
