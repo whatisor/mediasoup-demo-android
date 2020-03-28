@@ -179,7 +179,7 @@ public class RoomActor {
                 //synchronized (locker)
                 {
                     int n = width * height;
-                    if (RoomActor.currentFrame.length != n * 3) {
+                    if (RoomActor.currentFrame.length < n * 3) {
                         RoomActor.currentFrame = new byte[n * 3];
                     }
                     RoomActor.width = width;

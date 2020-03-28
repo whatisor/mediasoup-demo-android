@@ -16,6 +16,7 @@ import org.json.JSONObject;
 import org.mediasoup.droid.Consumer;
 import org.mediasoup.droid.Device;
 import org.mediasoup.droid.Logger;
+import org.mediasoup.droid.MediasoupException;
 import org.mediasoup.droid.Producer;
 import org.mediasoup.droid.RecvTransport;
 import org.mediasoup.droid.SendTransport;
@@ -164,9 +165,13 @@ public class RoomClient {
       Logger.w(TAG, "enableMic() | not loaded");
       return;
     }
-    if (!mMediasoupDevice.canProduce("audio")) {
-      Logger.w(TAG, "enableMic() | cannot produce audio");
-      return;
+    try {
+      if (!mMediasoupDevice.canProduce("audio")) {
+        Logger.w(TAG, "enableMic() | cannot produce audio");
+        return;
+      }
+    } catch (MediasoupException e) {
+      e.printStackTrace();
     }
     if (mSendTransport == null) {
       Logger.w(TAG, "enableMic() | mSendTransport doesn't ready");
@@ -176,14 +181,18 @@ public class RoomClient {
       mLocalAudioTrack = PeerConnectionUtils.createAudioTrack(mContext, "mic");
       mLocalAudioTrack.setEnabled(true);
     }
-    mMicProducer =
-        mSendTransport.produce(
-            producer -> {
-              Logger.e(TAG, "onTransportClose(), micProducer");
-            },
-            mLocalAudioTrack,
-            null,
-            null);
+    try {
+      mMicProducer =
+          mSendTransport.produce(
+              producer -> {
+                Logger.e(TAG, "onTransportClose(), micProducer");
+              },
+              mLocalAudioTrack,
+              null,
+              null);
+    } catch (MediasoupException e) {
+      e.printStackTrace();
+    }
     //mStore.addProducer(mMicProducer);
   }
 
@@ -675,9 +684,13 @@ public class RoomClient {
     String dtlsParameters = info.optString("dtlsParameters");
     String sctpParameters = info.optString("sctpParameters");
 
-    mSendTransport =
-        mMediasoupDevice.createSendTransport(
-            sendTransportListener, id, iceParameters, iceCandidates, dtlsParameters);
+    try {
+      mSendTransport =
+          mMediasoupDevice.createSendTransport(
+              sendTransportListener, id, iceParameters, iceCandidates, dtlsParameters);
+    } catch (MediasoupException e) {
+      e.printStackTrace();
+    }
   }
 
   @WorkerThread
