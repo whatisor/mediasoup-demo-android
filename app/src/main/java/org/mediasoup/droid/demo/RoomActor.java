@@ -53,7 +53,9 @@ public class RoomActor {
 
             Log.d(TAG, "Volume now " + currentVolume);
             if(mRoomClient.getAudioTrack() != null){
-                mRoomClient.getAudioTrack().setVolume(currentVolume);
+                float vol = currentVolume*1.0f/audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+                Log.d(TAG, "Volume now " + vol);
+                mRoomClient.getAudioTrack().setVolume(vol);
             }
         }
     }
@@ -68,8 +70,8 @@ public class RoomActor {
         mRoomId = roomID;
         loadRoomConfig();
         initRoomClient();
-        //checkPermission();
-        mRoomClient.join();
+        checkPermission();
+        //mRoomClient.join();
 
 //        gpuImage = new GPUImage(this.context);
 //        GPUImageI420RGBFilter transform = new GPUImageI420RGBFilter();
@@ -122,7 +124,7 @@ public class RoomActor {
         String[] permissions = {
                 Manifest.permission.INTERNET,
                 Manifest.permission.RECORD_AUDIO,
-                Manifest.permission.CAMERA,
+                //Manifest.permission.CAMERA,
                 Manifest.permission.WRITE_EXTERNAL_STORAGE
         };
         String rationale = "Please provide permissions";
@@ -245,6 +247,12 @@ public class RoomActor {
 
     public static int getFrameHeight() {
         return RoomActor.height;
+    }
+
+    //test
+
+    public void testMic(){
+        mRoomClient.enableMicImpl();
     }
 
 }
