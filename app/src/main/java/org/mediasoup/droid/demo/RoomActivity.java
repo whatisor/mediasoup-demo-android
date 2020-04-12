@@ -19,7 +19,7 @@ public class RoomActivity extends Activity implements LifecycleOwner{
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
-    roomActor = new RoomActor(this,"immertec");
+    roomActor = new RoomActor(this,"immertec",1);
   }
 
 

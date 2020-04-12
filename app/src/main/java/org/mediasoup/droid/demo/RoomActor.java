@@ -61,10 +61,10 @@ public class RoomActor {
     }
 
 
-    public RoomActor(Activity context,String roomID) {
+    public RoomActor(Activity context,String roomID, int logLevel) {
         this.context = context;
 
-        Logger.setLogLevel(Logger.LogLevel.LOG_WARN);
+        Logger.setLogLevel(Logger.LogLevel.values()[logLevel]);
         Logger.setDefaultHandler();
         MediasoupClient.initialize(context);
         mRoomId = roomID;
@@ -124,6 +124,7 @@ public class RoomActor {
         String[] permissions = {
                 Manifest.permission.INTERNET,
                 Manifest.permission.RECORD_AUDIO,
+                Manifest.permission.CALL_PHONE,
                 //Manifest.permission.CAMERA,
                 Manifest.permission.WRITE_EXTERNAL_STORAGE
         };
@@ -147,7 +148,7 @@ public class RoomActor {
 
     //Unity interface
     private class RenderCallback implements VideoSink {
-        final private int MAX_BUFFER = 5;
+        final private int MAX_BUFFER = 1;
         RGBColor color = new RGBColor();
         private class RGBColor {
             public int r, g, b;
@@ -168,53 +169,35 @@ public class RoomActor {
 
         @Override
         public void onFrame(VideoFrame videoFrame) {
-            Log.d("RenderCallback", "render frame getRotatedWidth" + videoFrame.getRotatedWidth());
+            //Log.d("RenderCallback", "render frame getRotatedWidth" + videoFrame.getRotatedWidth());
+
             //data prepare
             //extract frame data
             if(true) {
                 VideoFrame.I420Buffer i420 = videoFrame.getBuffer().toI420();
-                ByteBuffer y = i420.getDataY();
+                 ByteBuffer y = i420.getDataY();
                 ByteBuffer u = i420.getDataU();
                 ByteBuffer v = i420.getDataV();
-                int width = i420.getWidth();
-                int height = i420.getHeight();
+                RoomActor.width = i420.getWidth();
+                RoomActor.height = i420.getHeight();
                 //synchronized (locker)
                 {
-                    int n = width * height;
-                    if (RoomActor.currentFrame.length < n * 3) {
-                        RoomActor.currentFrame = new byte[n * 3];
+                    //Log.d("RenderCallback", "render frame y " + y.remaining());
+
+                    if (RoomActor.y.length != y.remaining()) {
+                        RoomActor.y = new byte[y.remaining()];
+                        RoomActor.u = new byte[u.remaining()];
+                        RoomActor.v = new byte[v.remaining()];
                     }
-                    RoomActor.width = width;
-                    RoomActor.height = height;
-                    //Log.d(TAG, "renderFrame  frame.yuvPlanes[0] " + y.capacity());
-                    //Log.d(TAG, "renderFrame  frame.yuvPlanes[1] " + u.capacity());
-                    //Log.d(TAG, "renderFrame  frame.yuvPlanes[2] " + v.capacity());
+                    y.get(RoomActor.y);
+                    u.get(RoomActor.u);
+                    v.get(RoomActor.v);
 
-                    //cpu conversion
-                    if (true) {
-                        for (int i = 0; i < height; i++) {
-                            for (int j = 0; j < width; j++) {
-                                int index = i * width + j;
-                                //color.fromYUV(y.get(index) & 0xff, u.get((i / 2) * width / 2 + j / 2) & 0xff,
-                                //      v.get((i / 2) * width / 2 + j / 2) & 0xff);
-                                RoomActor.currentFrame[index * 3] = y.get(index);//(byte) color.r;
-                                RoomActor.currentFrame[index * 3 + 1] = u.get((i / 2) * width / 2 + j / 2);//(byte) color.g;
-                                RoomActor.currentFrame[index * 3 + 2] = v.get((i / 2) * width / 2 + j / 2);///(byte) color.b;
-                            }
-
-                        }
-
-                        //while(queue.size() > MAX_BUFFER){
-                        //    queue.pop();
-                        //}
-                        if(queue.size() < MAX_BUFFER)
-                            queue.push(RoomActor.currentFrame);
-                        //Log.d("RenderCallback ","" +queue.size());
-                    } else {//gpu conversion
-                        //Bitmap bmp = BitmapFactory.
-                        //gpuImage.setImage(bitmap);
-
-                    }
+//                    if(queueY.size() < MAX_BUFFER) {
+//                        queueY.push(RoomActor.y);
+//                        queueU.push(RoomActor.u);
+//                        queueV.push(RoomActor.v);
+//                    }
                 }
             }
             videoFrame.release();
@@ -224,22 +207,36 @@ public class RoomActor {
 
     static public int width = 1, height = 1;
     static public byte[] currentFrame = new byte[width * height * 3];
-    static public byte[] currentFrameTmp = new byte[width * height * 3];
-    static public LinkedList<byte[]> queue = new LinkedList<>();
+    static public byte[] currentFrameTmpY = null;
+    static public byte[] currentFrameTmpU = null;
+    static public byte[] currentFrameTmpV = null;
+    static public  byte[] y = new byte[width * height * 3]
+            ,u= new byte[width * height * 3],v= new byte[width * height * 3];
+    static public LinkedList<byte[]> queueY = new LinkedList<>();
+    static public LinkedList<byte[]> queueU = new LinkedList<>();
+    static public LinkedList<byte[]> queueV = new LinkedList<>();
     static public Object locker = new Object();
     static public boolean isUsed = false;
 
 
     //public interface
-    public static byte[] getFrame() {
-        //Log.d("RenderCallback", "getFrame");
-        //synchronized (locker)
-        {
-            if(queue.isEmpty())return null;
-            currentFrameTmp = queue.pop();
-        }
-        return currentFrameTmp;
+    public static byte[] getY() {
+            //if(queueY.isEmpty())return currentFrameTmpY;
+            //currentFrameTmpY = queueY.pop();
+            return y;//currentFrameTmpY;
     }
+    public static byte[] getU() {
+//        if(queueU.isEmpty())return currentFrameTmpU;
+//        currentFrameTmpU = queueU.pop();
+        return u;//currentFrameTmpU;
+    }
+
+    public static byte[] getV() {
+//        if(queueV.isEmpty())return currentFrameTmpV;
+//        currentFrameTmpV = queueV.pop();
+        return v;//currentFrameTmpV;
+    }
+
 
     public static int getFrameWidth() {
         return RoomActor.width;

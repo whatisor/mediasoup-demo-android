@@ -32,6 +32,15 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
+
+        task copyRelease(type: Copy) {
+            from('build/outputs/aar')
+            into '../../unity-android-mediasoup-base-2018/Assets/Plugins/Android/'
+            include '**/*release.aar'
+        }
+    afterEvaluate {
+        assemble.finalizedBy(copyRelease)
+    }
 }
 
 dependencies {
@@ -42,7 +51,8 @@ dependencies {
     implementation 'io.crossbar.autobahn:autobahn-android:18.5.1'
     implementation 'io.reactivex.rxjava2:rxandroid:2.1.1'
     implementation 'org.protoojs.droid:protoo-client:4.0.3'
-    implementation 'org.mediasoup.droid:mediasoup-client:3.0.4-beta-1'
     implementation 'com.squareup.okhttp3:okhttp:4.3.0'
     implementation("com.squareup.okhttp3:logging-interceptor:4.3.0")
+    //implementation project(path: ':mediasoup-client-release')
+    implementation 'org.mediasoup.droid:mediasoup-client:3.0.4-beta-1'
 }

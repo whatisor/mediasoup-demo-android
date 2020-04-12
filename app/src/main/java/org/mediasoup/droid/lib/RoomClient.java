@@ -2,6 +2,8 @@ package org.mediasoup.droid.lib;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.media.AudioFormat;
+import android.media.AudioRecord;
 import android.media.MediaRecorder;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -26,6 +28,7 @@ import org.mediasoup.droid.lib.socket.WebSocketTransport;
 import org.protoojs.droid.Message;
 import org.protoojs.droid.ProtooException;
 import org.webrtc.AudioTrack;
+import org.webrtc.MediaCodecVideoDecoder;
 import org.webrtc.VideoSink;
 import org.webrtc.VideoTrack;
 import org.webrtc.voiceengine.WebRtcAudioManager;
@@ -113,23 +116,34 @@ public class RoomClient {
         this(context, roomId, peerId, displayName, false, false, options);
     }
     //returns whether the microphone is available
-    public static boolean getMicrophoneAvailable(Context context) {
-        MediaRecorder recorder = new MediaRecorder();
-        recorder.setAudioSource(MediaRecorder.AudioSource.MIC);
-        recorder.setOutputFormat(MediaRecorder.OutputFormat.DEFAULT);
-        recorder.setAudioEncoder(MediaRecorder.AudioEncoder.DEFAULT);
-        recorder.setOutputFile(new File(context.getCacheDir(), "MediaUtil#micAvailTestFile").getAbsolutePath());
-        boolean available = true;
-        try {
-            recorder.prepare();
-            recorder.start();
+    private static boolean validateMicAvailability(){
+        Boolean available = true;
+        AudioRecord recorder =
+                new AudioRecord(MediaRecorder.AudioSource.MIC, 44100,
+                        AudioFormat.CHANNEL_IN_MONO,
+                        AudioFormat.ENCODING_DEFAULT, 44100);
+        try{
+            if(recorder.getRecordingState() != AudioRecord.RECORDSTATE_STOPPED ){
+                available = false;
 
+                Log.w(TAG,"MIC is busy");
+
+            }
+
+            recorder.startRecording();
+            if(recorder.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING){
+                recorder.stop();
+                available = false;
+                Log.w(TAG,"Stop MIC");
+
+            }
+            recorder.stop();
+        } finally{
+            Log.w(TAG,"Release MIC");
+            recorder.release();
+            recorder = null;
         }
-        catch (Exception exception) {
-            available = false;
-            Log.e(TAG,"Mic error " + exception.getMessage());
-        }
-        recorder.release();
+
         return available;
     }
     public RoomClient(
@@ -155,7 +169,6 @@ public class RoomClient {
 
         // init worker handler.
         HandlerThread handlerThread = new HandlerThread("worker");
-        handlerThread.setPriority(Thread.MAX_PRIORITY);
         handlerThread.start();
         mWorkHandler = new Handler(handlerThread.getLooper());
         mMainHandler = new Handler(Looper.getMainLooper());
@@ -163,7 +176,7 @@ public class RoomClient {
         WebRtcAudioManager.setBlacklistDeviceForOpenSLESUsage(true);
 
         //check microphone
-        if(!getMicrophoneAvailable(mContext)){
+        if(!validateMicAvailability()){
             Log.e(TAG,"Mic in use !");
         }
     }
@@ -909,10 +922,10 @@ public class RoomClient {
                 Log.d(TAG, "onNewConsumer addSink " + consumer.getId());
                 VideoTrack video = (VideoTrack) consumer.getTrack();
                 if (frameChecker != null) {
-                    // Log.d(TAG,"MediaCodecVideoDecoder.isVp8HwSupported() "+MediaCodecVideoDecoder.isVp8HwSupported());
-                    // Log.d(TAG,"MediaCodecVideoDecoder.isH264HwSupported() "+MediaCodecVideoDecoder.isH264HwSupported());
-                    // Log.d(TAG,"MediaCodecVideoDecoder.isVp9HwSupported() "+MediaCodecVideoDecoder.isVp9HwSupported());
-                    // Log.d(TAG,"MediaCodecVideoDecoder.isH264HighProfileHwSupported() "+MediaCodecVideoDecoder.isH264HighProfileHwSupported());
+                     Log.d(TAG,"MediaCodecVideoDecoder.isVp8HwSupported() "+ MediaCodecVideoDecoder.isVp8HwSupported());
+                     Log.d(TAG,"MediaCodecVideoDecoder.isH264HwSupported() "+MediaCodecVideoDecoder.isH264HwSupported());
+                     Log.d(TAG,"MediaCodecVideoDecoder.isVp9HwSupported() "+MediaCodecVideoDecoder.isVp9HwSupported());
+                     Log.d(TAG,"MediaCodecVideoDecoder.isH264HighProfileHwSupported() "+MediaCodecVideoDecoder.isH264HighProfileHwSupported());
                     video.addSink(frameChecker);
                 } else {
                     Log.d(TAG, "frameChecker is null");
