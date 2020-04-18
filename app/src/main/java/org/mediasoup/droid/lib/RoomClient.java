@@ -176,9 +176,9 @@ public class RoomClient {
         WebRtcAudioManager.setBlacklistDeviceForOpenSLESUsage(true);
 
         //check microphone
-        if(!validateMicAvailability()){
-            Log.e(TAG,"Mic in use !");
-        }
+//        if(!validateMicAvailability()){
+//            Log.e(TAG,"Mic in use !");
+//        }
     }
 
     public Handler getmWorkHandler() {

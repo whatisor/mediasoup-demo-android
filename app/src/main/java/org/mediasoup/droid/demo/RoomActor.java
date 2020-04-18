@@ -148,7 +148,7 @@ public class RoomActor {
 
     //Unity interface
     private class RenderCallback implements VideoSink {
-        final private int MAX_BUFFER = 1;
+        final private int MAX_BUFFER = 2;
         RGBColor color = new RGBColor();
         private class RGBColor {
             public int r, g, b;
@@ -169,11 +169,11 @@ public class RoomActor {
 
         @Override
         public void onFrame(VideoFrame videoFrame) {
-            //Log.d("RenderCallback", "render frame getRotatedWidth" + videoFrame.getRotatedWidth());
+            Log.d("RenderCallback", "render frame getRotatedWidth" + videoFrame.getRotatedWidth());
 
             //data prepare
             //extract frame data
-            if(true) {
+            if(queueY.size() < MAX_BUFFER) {
                 VideoFrame.I420Buffer i420 = videoFrame.getBuffer().toI420();
                  ByteBuffer y = i420.getDataY();
                 ByteBuffer u = i420.getDataU();
@@ -184,7 +184,7 @@ public class RoomActor {
                 {
                     //Log.d("RenderCallback", "render frame y " + y.remaining());
 
-                    if (RoomActor.y.length != y.remaining()) {
+                    if (RoomActor.y == null || RoomActor.y.length != y.remaining()) {
                         RoomActor.y = new byte[y.remaining()];
                         RoomActor.u = new byte[u.remaining()];
                         RoomActor.v = new byte[v.remaining()];
@@ -193,11 +193,9 @@ public class RoomActor {
                     u.get(RoomActor.u);
                     v.get(RoomActor.v);
 
-//                    if(queueY.size() < MAX_BUFFER) {
-//                        queueY.push(RoomActor.y);
-//                        queueU.push(RoomActor.u);
-//                        queueV.push(RoomActor.v);
-//                    }
+                    queueY.push(RoomActor.y);
+                    queueU.push(RoomActor.u);
+                    queueV.push(RoomActor.v);
                 }
             }
             videoFrame.release();
@@ -205,36 +203,31 @@ public class RoomActor {
         }
     }
 
-    static public int width = 1, height = 1;
-    static public byte[] currentFrame = new byte[width * height * 3];
-    static public byte[] currentFrameTmpY = null;
-    static public byte[] currentFrameTmpU = null;
-    static public byte[] currentFrameTmpV = null;
-    static public  byte[] y = new byte[width * height * 3]
-            ,u= new byte[width * height * 3],v= new byte[width * height * 3];
+    static public int width = 0, height = 0;
+    //static public byte[] currentFrame = new byte[width * height];
+    static public byte[] currentFrameTmpY = null;// =  new byte[width * height];
+    static public byte[] currentFrameTmpU = null ;//=  new byte[width * height / 2];
+    static public byte[] currentFrameTmpV = null;// =  new byte[width * height / 2];
+    static public  byte[] y = null,u = null,v = null;
     static public LinkedList<byte[]> queueY = new LinkedList<>();
     static public LinkedList<byte[]> queueU = new LinkedList<>();
     static public LinkedList<byte[]> queueV = new LinkedList<>();
     static public Object locker = new Object();
-    static public boolean isUsed = false;
 
 
     //public interface
     public static byte[] getY() {
-            //if(queueY.isEmpty())return currentFrameTmpY;
-            //currentFrameTmpY = queueY.pop();
-            return y;//currentFrameTmpY;
+            currentFrameTmpY = queueY.pop();
+            return currentFrameTmpY;
     }
     public static byte[] getU() {
-//        if(queueU.isEmpty())return currentFrameTmpU;
-//        currentFrameTmpU = queueU.pop();
-        return u;//currentFrameTmpU;
+        currentFrameTmpU = queueU.pop();
+        return currentFrameTmpU;
     }
 
     public static byte[] getV() {
-//        if(queueV.isEmpty())return currentFrameTmpV;
-//        currentFrameTmpV = queueV.pop();
-        return v;//currentFrameTmpV;
+        currentFrameTmpV = queueV.pop();
+        return currentFrameTmpV;
     }
 
 
@@ -244,6 +237,11 @@ public class RoomActor {
 
     public static int getFrameHeight() {
         return RoomActor.height;
+    }
+
+    //check if no more frame;
+    public static boolean isNewFrame() {
+        return ! queueY.isEmpty();
     }
 
     //test
