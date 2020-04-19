@@ -197,8 +197,8 @@ public class RoomActor {
                     queueU.push(RoomActor.u);
                     queueV.push(RoomActor.v);
                 }
+                videoFrame.release();
             }
-            videoFrame.release();
 
         }
     }
