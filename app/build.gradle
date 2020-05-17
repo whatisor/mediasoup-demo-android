@@ -55,4 +55,5 @@ dependencies {
     implementation("com.squareup.okhttp3:logging-interceptor:4.3.0")
     //implementation project(path: ':mediasoup-client-release')
     implementation 'org.mediasoup.droid:mediasoup-client:3.0.4-beta-1'
+    implementation 'com.github.nkzawa:socket.io-client:0.6.0'
 }

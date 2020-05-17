@@ -32,11 +32,11 @@ public class UrlFactory {
     return url;
   }
 
-  public static String getProtooUrl(
+  public static String getProtooUrl(boolean secured,
       String roomId, String peerId, boolean forceH264, boolean forceVP9) {
     String url =
         String.format(
-            Locale.US, "wss://%s:%d/?roomId=%s&peerId=%s", HOSTNAME, PORT, roomId, peerId);
+            Locale.US, (secured?"wss":"ws")+"://%s:%d/?roomId=%s&peerId=%s", HOSTNAME, PORT, roomId, peerId);
     if (forceH264) {
       url += "&forceH264=true";
     } else if (forceVP9) {
@@ -44,6 +44,22 @@ public class UrlFactory {
     }
     return url;
   }
+
+  public static String getSocketIOQuery(String roomId, String peerId, boolean forceH264, boolean forceVP9) {
+        String url =
+                String.format(
+                        Locale.US, "{\"roomId\":\"%s\",\"peerInfo\":{\"name\":\"%s\"},\"joinType\":\"join\"}", roomId,peerId);
+        if (forceH264) {
+            url += "&forceH264=true";
+        } else if (forceVP9) {
+            url += "&forceVP9=true";
+        }
+        return url;
+    }
+
+    public static String getHOSTNAME(){
+      return HOSTNAME;
+    }
 
   public static void enableSelfSignedHttpClient() {
     final TrustManager[] trustManagers =

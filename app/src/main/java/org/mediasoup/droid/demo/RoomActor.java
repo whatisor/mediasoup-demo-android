@@ -30,6 +30,7 @@ public class RoomActor {
     private RoomOptions mOptions = new RoomOptions();
     private RoomClient mRoomClient;
     private Activity context;
+    private boolean secured;
 
     //volume change listener
     private AudioContentObserver audioContentObserver = null;
@@ -61,9 +62,9 @@ public class RoomActor {
     }
 
 
-    public RoomActor(Activity context,String roomID, int logLevel) {
+    public RoomActor(Activity context,String roomID, int logLevel, boolean secured) {
         this.context = context;
-
+        this.secured = secured;
         Logger.setLogLevel(Logger.LogLevel.values()[logLevel]);
         Logger.setDefaultHandler();
         MediasoupClient.initialize(context);
@@ -106,7 +107,7 @@ public class RoomActor {
         Log.d(TAG,"Room ID " + mRoomId);
         mRoomClient =
                 new RoomClient(
-                        this.context,  mRoomId, mPeerId, mDisplayName, mForceH264, mForceVP9, mOptions);
+                        this.context,  mRoomId, mPeerId, mDisplayName, mForceH264, mForceVP9, mOptions,this.secured);
         mRoomClient.frameChecker = new RenderCallback();
     }
 

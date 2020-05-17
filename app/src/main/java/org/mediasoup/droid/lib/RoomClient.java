@@ -5,9 +5,11 @@ import android.content.SharedPreferences;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
+import android.net.Uri;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
+import android.util.Base64;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -34,6 +36,7 @@ import org.webrtc.VideoTrack;
 import org.webrtc.voiceengine.WebRtcAudioManager;
 
 import java.io.File;
+import java.net.URISyntaxException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -41,6 +44,12 @@ import io.reactivex.disposables.CompositeDisposable;
 
 import static org.mediasoup.droid.lib.JsonUtils.jsonPut;
 import static org.mediasoup.droid.lib.JsonUtils.toJsonObject;
+
+//socketio IF
+import com.github.nkzawa.emitter.Emitter;
+import com.github.nkzawa.socketio.client.Ack;
+import com.github.nkzawa.socketio.client.IO;
+import com.github.nkzawa.socketio.client.Socket;
 
 @SuppressWarnings("WeakerAccess")
 public class RoomClient {
@@ -59,7 +68,7 @@ public class RoomClient {
     // Closed flag.
     private boolean mClosed = false;
     // Android context.
-    private  Context mContext = null;
+    private Context mContext = null;
     // Room mOptions.
     private final @NonNull
     RoomOptions mOptions;
@@ -67,6 +76,7 @@ public class RoomClient {
     private String mDisplayName;
     // Protoo URL.
     private String mProtooUrl;
+    private Socket mSocket;
     // mProtoo-client Protoo instance.
     private Protoo mProtoo;
     // mediasoup-client Device instance.
@@ -83,8 +93,8 @@ public class RoomClient {
     // local Video Track for cam.
     private VideoTrack mLocalVideoTrack = null;
     // jobs worker handler.
-    private final Handler mWorkHandler ;
-    private  final Handler mMainHandler;
+    private final Handler mWorkHandler;
+    private final Handler mMainHandler;
     // Disposable Composite. used to cancel running
     private CompositeDisposable mCompositeDisposable = new CompositeDisposable();
     // Share preferences
@@ -103,8 +113,8 @@ public class RoomClient {
     }
 
     public RoomClient(
-            Context context, String roomId, String peerId, String displayName) {
-        this(context, roomId, peerId, displayName, false, false, null);
+            Context context, String roomId, String peerId, String displayName, boolean secured) {
+        this(context, roomId, peerId, displayName, false, false, null, secured);
     }
 
     public RoomClient(
@@ -112,40 +122,42 @@ public class RoomClient {
             String roomId,
             String peerId,
             String displayName,
-            RoomOptions options) {
-        this(context, roomId, peerId, displayName, false, false, options);
+            RoomOptions options, boolean secured) {
+        this(context, roomId, peerId, displayName, false, false, options, secured);
     }
+
     //returns whether the microphone is available
-    private static boolean validateMicAvailability(){
+    private static boolean validateMicAvailability() {
         Boolean available = true;
         AudioRecord recorder =
                 new AudioRecord(MediaRecorder.AudioSource.MIC, 44100,
                         AudioFormat.CHANNEL_IN_MONO,
                         AudioFormat.ENCODING_DEFAULT, 44100);
-        try{
-            if(recorder.getRecordingState() != AudioRecord.RECORDSTATE_STOPPED ){
+        try {
+            if (recorder.getRecordingState() != AudioRecord.RECORDSTATE_STOPPED) {
                 available = false;
 
-                Log.w(TAG,"MIC is busy");
+                Log.w(TAG, "MIC is busy");
 
             }
 
             recorder.startRecording();
-            if(recorder.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING){
+            if (recorder.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING) {
                 recorder.stop();
                 available = false;
-                Log.w(TAG,"Stop MIC");
+                Log.w(TAG, "Stop MIC");
 
             }
             recorder.stop();
-        } finally{
-            Log.w(TAG,"Release MIC");
+        } finally {
+            Log.w(TAG, "Release MIC");
             recorder.release();
             recorder = null;
         }
 
         return available;
     }
+
     public RoomClient(
             Context context,
             String roomId,
@@ -153,13 +165,13 @@ public class RoomClient {
             String displayName,
             boolean forceH264,
             boolean forceVP9,
-            RoomOptions options) {
+            RoomOptions options, boolean secured) {
         //super(roomStore);
         this.mContext = context.getApplicationContext();
         this.mOptions = options == null ? new RoomOptions() : options;
         this.mDisplayName = displayName;
         this.mClosed = false;
-        this.mProtooUrl = UrlFactory.getProtooUrl(roomId, peerId, forceH264, forceVP9);
+        this.mProtooUrl = UrlFactory.getSocketIOQuery(roomId, peerId, forceH264, forceVP9);
 
         // this.mStore.setMe(peerId, displayName, this.mOptions.getDevice());
         // this.mStore.setRoomUrl(roomId, UrlFactory.getInvitationLink(roomId, forceH264, forceVP9));
@@ -185,14 +197,113 @@ public class RoomClient {
         return mWorkHandler;
     }
 
+
+    private Emitter.Listener onRoomJoined = new Emitter.Listener() {
+        @Override
+        public void call(final Object... args) {
+            mWorkHandler.post(() -> {
+                for (Object arg : args)
+                    Log.d(TAG, "onRoomJoined " + arg.toString());
+                try {
+                    String rtpCapabilities = ((JSONObject) args[0]).getString("rtpCapabilities");
+                    mWorkHandler.post(() -> joinImpl(rtpCapabilities, null));
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+
+
+            });
+        }
+    };
+    private Emitter.Listener onRoomError = new Emitter.Listener() {
+        @Override
+        public void call(final Object... args) {
+            mWorkHandler.post(() -> {
+                for (Object arg : args)
+                    Log.d(TAG, "onRoomError " + arg.toString());
+                if (mClosed) {
+                    return;
+                }
+                close();
+            });
+        }
+    };
+
+    private Emitter.Listener onConsumerNew = new Emitter.Listener() {
+        @Override
+        public void call(final Object... args) {
+            mWorkHandler.post(() -> {
+                for (Object arg : args)
+                    Log.d(TAG, "onConsumerNew " + arg.toString());
+                //id, producerId, kind, rtpParameters, appData
+                JSONObject obj = (JSONObject) args[0];
+                Consumer consumer =
+                        null;
+                try {
+                    Log.d(TAG, "onNewConsumer " + obj.getString("producerId") + " rtpParameters " + obj.getString("rtpParameters"));
+
+                    consumer = mRecvTransport.consume(
+                            c -> {
+                                // mConsumers.remove(c.getId());d
+                                Logger.w(TAG, "onTransportClose for consume");
+                            },
+                            obj.getString("id"),
+                            obj.getString("producerId"),
+                            obj.getString("kind"),
+                            obj.getString("rtpParameters"),
+                            obj.getString("appData"));
+                } catch (MediasoupException | JSONException e) {
+                    e.printStackTrace();
+                }
+
+                //mConsumers.put(consumer.getId(), new ConsumerHolder(peerId, consumer));
+                // mStore.addConsumer(peerId, type, consumer, producerPaused);
+
+                Log.d(TAG, "onNewConsumer " + consumer.getTrack().kind());
+                if (consumer.getTrack() != null && consumer.getTrack().kind().indexOf("video") >= 0) {
+                    Log.d(TAG, "onNewConsumer addSink " + consumer.getId());
+                    VideoTrack video = (VideoTrack) consumer.getTrack();
+                    if (frameChecker != null) {
+                        Log.d(TAG, "MediaCodecVideoDecoder.isVp8HwSupported() " + MediaCodecVideoDecoder.isVp8HwSupported());
+                        Log.d(TAG, "MediaCodecVideoDecoder.isH264HwSupported() " + MediaCodecVideoDecoder.isH264HwSupported());
+                        Log.d(TAG, "MediaCodecVideoDecoder.isVp9HwSupported() " + MediaCodecVideoDecoder.isVp9HwSupported());
+                        Log.d(TAG, "MediaCodecVideoDecoder.isH264HighProfileHwSupported() " + MediaCodecVideoDecoder.isH264HighProfileHwSupported());
+                        video.addSink(frameChecker);
+                    } else {
+                        Log.d(TAG, "frameChecker is null");
+                    }
+                }
+                //we get audio track to control volume. TODO: Support multiple tracks
+                else if (consumer.getTrack() != null && consumer.getTrack().kind().indexOf("audio") >= 0) {
+                    audioTrack = (AudioTrack) consumer.getTrack();
+
+                    //test
+                    audioTrack.setVolume(0.5);
+                }
+            });
+        }
+    };
+
+
     @WorkerThread
     public void join() {
         mWorkHandler.post(
                 () -> {
                     Logger.d(TAG, "join() " + this.mProtooUrl);
                     //mStore.setRoomState(ConnectionState.CONNECTING);
-                    WebSocketTransport transport = new WebSocketTransport(mProtooUrl);
-                    mProtoo = new Protoo(transport, peerListener);
+                    //WebSocketTransport transport = new WebSocketTransport(mProtooUrl);
+                    //mProtoo = new Protoo(transport, peerListener);
+                    try {
+
+                        IO.Options opts = new IO.Options();
+                        opts.query = "token=" + Base64.encodeToString(mProtooUrl.getBytes(), Base64.DEFAULT);
+                        mSocket = IO.socket(UrlFactory.getHOSTNAME(), opts);
+                        mSocket.on("room-joined", onRoomJoined);
+                        mSocket.on("room-error", onRoomError);
+                        mSocket.connect();
+                    } catch (URISyntaxException e) {
+                        Log.d(TAG, "socket.io " + e.getMessage());
+                    }
                 });
     }
 
@@ -229,17 +340,17 @@ public class RoomClient {
             mLocalAudioTrack.setEnabled(true);
         }
         try {
-            if(mMicProducer == null){
+            if (mMicProducer == null) {
 
                 Logger.w(TAG, "enableMic produce");
-            mMicProducer =
-                    mSendTransport.produce(
-                            producer -> {
-                                Logger.e(TAG, "onTransportClose(), micProducer");
-                            },
-                            mLocalAudioTrack,
-                            null,
-                            null);
+                mMicProducer =
+                        mSendTransport.produce(
+                                producer -> {
+                                    Logger.e(TAG, "onTransportClose(), micProducer");
+                                },
+                                mLocalAudioTrack,
+                                null,
+                                null);
                 Logger.w(TAG, "enableMic produce DONE");
             }
         } catch (MediasoupException e) {
@@ -248,57 +359,6 @@ public class RoomClient {
         //mStore.addProducer(mMicProducer);
     }
 
-    @WorkerThread
-    public void disableMic() {
-        Logger.d(TAG, "disableMic()");
-
-        if (mMicProducer == null) {
-            return;
-        }
-
-        mMicProducer.close();
-        // mStore.removeProducer(mMicProducer.getId());
-
-        // TODO(HaiyangWu) : await
-        mCompositeDisposable.add(
-                mProtoo
-                        .request("closeProducer", req -> jsonPut(req, "producerId", mMicProducer.getId()))
-                        .subscribe(
-                                res -> {
-                                }
-                                //,
-                                //throwable ->
-                                //mStore.addNotify("Error closing server-side mic Producer: ", throwable)
-                        ));
-
-        mMicProducer = null;
-    }
-
-    @WorkerThread
-    public void muteMic() {
-        Logger.d(TAG, "muteMic()");
-    }
-
-    @WorkerThread
-    public void unmuteMic() {
-        Logger.d(TAG, "unmuteMic()");
-        // TODO:
-    }
-
-
-    @WorkerThread
-    public void muteAudio() {
-        Logger.d(TAG, "muteAudio()");
-        // TODO: Mute/unmute participants\' audio
-        // mStore.setAudioMutedState(true);
-    }
-
-    @WorkerThread
-    public void unmuteAudio() {
-        Logger.d(TAG, "unmuteAudio()");
-        // TODO: Mute/unmute participants\' audio
-        //mStore.setAudioMutedState(false);
-    }
 
     @WorkerThread
     public void restartIce() {
@@ -326,181 +386,6 @@ public class RoomClient {
                     }
                     //mStore.setRestartIceInProgress(false);
                 });
-    }
-
-    @WorkerThread
-    public void setMaxSendingSpatialLayer() {
-        Logger.d(TAG, "setMaxSendingSpatialLayer()");
-        // TODO:
-    }
-
-    @WorkerThread
-    public void setConsumerPreferredLayers(String spatialLayer) {
-        Logger.d(TAG, "setConsumerPreferredLayers()");
-        // TODO:
-    }
-
-    @WorkerThread
-    public void setConsumerPreferredLayers(
-            String consumerId, String spatialLayer, String temporalLayer) {
-        Logger.d(TAG, "setConsumerPreferredLayers()");
-        // TODO:
-    }
-
-    @WorkerThread
-    public void requestConsumerKeyFrame(String consumerId) {
-        Logger.d(TAG, "requestConsumerKeyFrame()");
-        mCompositeDisposable.add(
-                mProtoo
-                        .request("requestConsumerKeyFrame", req -> jsonPut(req, "consumerId", "consumerId"))
-                        .subscribe(
-                                (res) -> {
-                                    //mStore.addNotify("Keyframe requested for video consumer");
-                                },
-                                e -> {
-                                    logError("restartIce() | failed:", e);
-                                    //mStore.addNotify("error", "ICE restart failed: " + e.getMessage());
-                                }));
-    }
-
-    @WorkerThread
-    public void enableChatDataProducer() {
-        Logger.d(TAG, "enableChatDataProducer()");
-        // TODO:
-    }
-
-    @WorkerThread
-    public void enableBotDataProducer() {
-        Logger.d(TAG, "enableBotDataProducer()");
-        // TODO:
-    }
-
-    @WorkerThread
-    public void sendChatMessage(String txt) {
-        Logger.d(TAG, "sendChatMessage()");
-        // TODO:
-    }
-
-    @WorkerThread
-    public void sendBotMessage(String txt) {
-        Logger.d(TAG, "sendBotMessage()");
-        // TODO:
-    }
-
-    @WorkerThread
-    public void changeDisplayName(String displayName) {
-        Logger.d(TAG, "changeDisplayName()");
-
-        // Store in cookie.
-        mPreferences.edit().putString("displayName", displayName).apply();
-
-        mCompositeDisposable.add(
-                mProtoo
-                        .request("changeDisplayName", req -> jsonPut(req, "displayName", displayName))
-                        .subscribe(
-                                (res) -> {
-                                    mDisplayName = displayName;
-                                    //mStore.setDisplayName(displayName);
-                                    //mStore.addNotify("Display name change");
-                                },
-                                e -> {
-                                    logError("changeDisplayName() | failed:", e);
-                                    //mStore.addNotify("error", "Could not change display name: " + e.getMessage());
-
-                                    // We need to refresh the component for it to render the previous
-                                    // displayName again.
-                                    //mStore.setDisplayName(mDisplayName);
-                                }));
-    }
-
-    @WorkerThread
-    public void getSendTransportRemoteStats() {
-        Logger.d(TAG, "getSendTransportRemoteStats()");
-        // TODO:
-    }
-
-    @WorkerThread
-    public void getRecvTransportRemoteStats() {
-        Logger.d(TAG, "getRecvTransportRemoteStats()");
-        // TODO:
-    }
-
-    @WorkerThread
-    public void getAudioRemoteStats() {
-        Logger.d(TAG, "getAudioRemoteStats()");
-        // TODO:
-    }
-
-    @WorkerThread
-    public void getVideoRemoteStats() {
-        Logger.d(TAG, "getVideoRemoteStats()");
-        // TODO:
-    }
-
-    @WorkerThread
-    public void getConsumerRemoteStats(String consumerId) {
-        Logger.d(TAG, "getConsumerRemoteStats()");
-        // TODO:
-    }
-
-    @WorkerThread
-    public void getChatDataProducerRemoteStats(String consumerId) {
-        Logger.d(TAG, "getChatDataProducerRemoteStats()");
-        // TODO:
-    }
-
-    @WorkerThread
-    public void getBotDataProducerRemoteStats() {
-        Logger.d(TAG, "getBotDataProducerRemoteStats()");
-        // TODO:
-    }
-
-    @WorkerThread
-    public void getDataConsumerRemoteStats(String dataConsumerId) {
-        Logger.d(TAG, "getDataConsumerRemoteStats()");
-        // TODO:
-    }
-
-    @WorkerThread
-    public void getSendTransportLocalStats() {
-        Logger.d(TAG, "getSendTransportLocalStats()");
-        // TODO:
-    }
-
-    @WorkerThread
-    public void getRecvTransportLocalStats() {
-        Logger.d(TAG, "getRecvTransportLocalStats()");
-        // TODO:
-    }
-
-    @WorkerThread
-    public void getAudioLocalStats() {
-        Logger.d(TAG, "getAudioLocalStats()");
-        // TODO:
-    }
-
-    @WorkerThread
-    public void getVideoLocalStats() {
-        Logger.d(TAG, "getVideoLocalStats()");
-        // TODO:
-    }
-
-    @WorkerThread
-    public void getConsumerLocalStats(String consumerId) {
-        Logger.d(TAG, "getConsumerLocalStats()");
-        // TODO:
-    }
-
-    @WorkerThread
-    public void applyNetworkThrottle(String uplink, String downlink, String rtt, String secret) {
-        Logger.d(TAG, "applyNetworkThrottle()");
-        // TODO:
-    }
-
-    @WorkerThread
-    public void resetNetworkThrottle(boolean silent, String secret) {
-        Logger.d(TAG, "applyNetworkThrottle()");
-        // TODO:
     }
 
     @WorkerThread
@@ -532,7 +417,6 @@ public class RoomClient {
                     }
 
                 });
-
 
 
         // mStore.setRoomState(ConnectionState.CLOSED);
@@ -575,7 +459,7 @@ public class RoomClient {
             new Protoo.Listener() {
                 @Override
                 public void onOpen() {
-                    mWorkHandler.post(() -> joinImpl());
+                    mWorkHandler.post(() -> joinImpl(null, null));
                 }
 
                 @Override
@@ -658,49 +542,27 @@ public class RoomClient {
             };
 
     @WorkerThread
-    private void joinImpl() {
+    private void joinImpl(String routerRtpCapabilities, JSONObject peers) {
         Logger.d(TAG, "joinImpl()");
 
         try {
+            Log.d(TAG, "createRecvTransport  routerRtpCapabilities " + routerRtpCapabilities);
             mMediasoupDevice = new Device();
-            String routerRtpCapabilities = mProtoo.syncRequest("getRouterRtpCapabilities");
             mMediasoupDevice.load(routerRtpCapabilities);
             String rtpCapabilities = mMediasoupDevice.getRtpCapabilities();
-            Log.d(TAG, "createRecvTransport  routerRtpCapabilities " + routerRtpCapabilities);
+            Log.d(TAG, "createRecvTransport  rtpCapabilities " + rtpCapabilities);
 
             // Create mediasoup Transport for sending (unless we don't want to produce).
+            mOptions.setProduce(false);
             if (mOptions.isProduce()) {
-                createSendTransport();
+                //createSendTransport();
             }
 
             // Create mediasoup Transport for sending (unless we don't want to consume).
             // if (mOptions.isConsume()) {
-            Log.d(TAG, "createRecvTransport rtpCapabilities " + rtpCapabilities);
             createRecvTransport();
             // }
 
-            // Join now into the room.
-            // TODO(HaiyangWu): Don't send our RTP capabilities if we don't want to consume.
-            String joinResponse =
-                    mProtoo.syncRequest(
-                            "join",
-                            req -> {
-                                jsonPut(req, "displayName", mDisplayName);
-                                jsonPut(req, "device", mOptions.getDevice().toJSONObject());
-                                jsonPut(req, "rtpCapabilities", toJsonObject(rtpCapabilities));
-                                // TODO (HaiyangWu): add sctpCapabilities
-                                jsonPut(req, "sctpCapabilities", "");
-                            });
-
-            // mStore.setRoomState(ConnectionState.CONNECTED);
-            // mStore.addNotify("You are in the room!", 3000);
-
-            JSONObject resObj = JsonUtils.toJsonObject(joinResponse);
-            JSONArray peers = resObj.optJSONArray("peers");
-            for (int i = 0; peers != null && i < peers.length(); i++) {
-                JSONObject peer = peers.getJSONObject(i);
-                //mStore.addPeer(peer.optString("id"), peer);
-            }
 
             // Enable mic/webcam.
             if (mOptions.isProduce()) {
@@ -761,27 +623,28 @@ public class RoomClient {
     private void createRecvTransport() throws Exception {
         Logger.d(TAG, "createRecvTransport()");
 
-        String res =
-                mProtoo.syncRequest(
-                        "createWebRtcTransport",
-                        req -> {
-                            jsonPut(req, "forceTcp", mOptions.isForceTcp());
-                            jsonPut(req, "producing", false);
-                            jsonPut(req, "consuming", true);
-                            // TODO (HaiyangWu): add sctpCapabilities
-                            jsonPut(req, "sctpCapabilities", "");
-                        });
-        JSONObject info = new JSONObject(res);
-        Logger.d(TAG, "device#createRecvTransport() " + info);
-        String id = info.optString("id");
-        String iceParameters = info.optString("iceParameters");
-        String iceCandidates = info.optString("iceCandidates");
-        String dtlsParameters = info.optString("dtlsParameters");
-        String sctpParameters = info.optString("sctpParameters");
+        mSocket.emit("transport-create", "receive", (Ack) args -> {
+            for (Object arg : args)
+                Log.d(TAG, "transport-create  receive " + arg.toString());
+            JSONObject obj = (JSONObject) args[0];
+            try {
+//                    JSONObject iceServers = toJsonObject("[{\"urls\": [\"turn:relay.immertec.com:5349\"," +
+//                            " \"turn:relay.immertec.com:3478\"], \"username\": \"ftnk\", \"credential\": \"ftnk\"}," +
+//                            " {\"urls\": \"stun:stun.l.google.com:19302\"}]");
+                mRecvTransport =
+                        mMediasoupDevice.createRecvTransport(
+                                recvTransportListener, obj.getString("id"), obj.getString("iceParameters"),
+                                obj.getString("iceCandidates"), obj.getString("dtlsParameters"));
 
-        mRecvTransport =
-                mMediasoupDevice.createRecvTransport(
-                        recvTransportListener, id, iceParameters, iceCandidates, dtlsParameters);
+
+                mSocket.emit("media-ready", toJsonObject(mMediasoupDevice.getRtpCapabilities()));
+                mSocket.on("consumer-new", onConsumerNew);
+
+            } catch (MediasoupException | JSONException e) {
+                e.printStackTrace();
+            }
+
+        });
     }
 
     private SendTransport.Listener sendTransportListener =
@@ -808,17 +671,8 @@ public class RoomClient {
                 @Override
                 public void onConnect(Transport transport, String dtlsParameters) {
                     Logger.d(listenerTAG + "_send", "onConnect()");
-                    mCompositeDisposable.add(
-                            mProtoo
-                                    .request(
-                                            "connectWebRtcTransport",
-                                            req -> {
-                                                jsonPut(req, "transportId", transport.getId());
-                                                jsonPut(req, "dtlsParameters", toJsonObject(dtlsParameters));
-                                            })
-                                    .subscribe(
-                                            d -> Logger.d(listenerTAG, "connectWebRtcTransport res: " + d),
-                                            t -> logError("connectWebRtcTransport for mSendTransport failed", t)));
+                    //{ transportId: receiveTransport.id, dtlsParameters }
+
                 }
 
                 @Override
@@ -835,17 +689,14 @@ public class RoomClient {
                 @Override
                 public void onConnect(Transport transport, String dtlsParameters) {
                     Logger.d(listenerTAG, "onConnect()");
-                    mCompositeDisposable.add(
-                            mProtoo
-                                    .request(
-                                            "connectWebRtcTransport",
-                                            req -> {
-                                                jsonPut(req, "transportId", transport.getId());
-                                                jsonPut(req, "dtlsParameters", toJsonObject(dtlsParameters));
-                                            })
-                                    .subscribe(
-                                            d -> Logger.d(listenerTAG, "connectWebRtcTransport res: " + d),
-                                            t -> logError("connectWebRtcTransport for mRecvTransport failed", t)));
+                    JSONObject opt = new JSONObject();
+                    try {
+                        opt.put("transportId", transport.getId());
+                        opt.put("dtlsParameters", toJsonObject(dtlsParameters));
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                    mSocket.emit("transport-connect", opt);
                 }
 
                 @Override
@@ -887,69 +738,6 @@ public class RoomClient {
         if (!mOptions.isConsume()) {
             handler.reject(403, "I do not want to consume");
             return;
-        }
-        try {
-            JSONObject data = request.getData();
-            String peerId = data.optString("peerId");
-            String producerId = data.optString("producerId");
-            String id = data.optString("id");
-            String kind = data.optString("kind");
-            String rtpParameters = data.optString("rtpParameters");
-            JSONObject rtpParametersJSON = new JSONObject(rtpParameters);
-            Log.d(TAG, "headerExtensions " + rtpParametersJSON.getString("headerExtensions"));
-            String type = data.optString("type");
-            String appData = data.optString("appData");
-            boolean producerPaused = data.optBoolean("producerPaused");
-
-            Log.d(TAG, "onNewConsumer " + producerId + " rtpParameters " + rtpParameters.toString());
-            Consumer consumer =
-                    mRecvTransport.consume(
-                            c -> {
-                                // mConsumers.remove(c.getId());
-                                Logger.w(TAG, "onTransportClose for consume");
-                            },
-                            id,
-                            producerId,
-                            kind,
-                            rtpParameters,
-                            appData);
-
-            //mConsumers.put(consumer.getId(), new ConsumerHolder(peerId, consumer));
-            // mStore.addConsumer(peerId, type, consumer, producerPaused);
-
-            Log.d(TAG, "onNewConsumer " + consumer.getTrack().kind());
-            if (consumer.getTrack() != null && consumer.getTrack().kind().indexOf("video") >= 0) {
-                Log.d(TAG, "onNewConsumer addSink " + consumer.getId());
-                VideoTrack video = (VideoTrack) consumer.getTrack();
-                if (frameChecker != null) {
-                     Log.d(TAG,"MediaCodecVideoDecoder.isVp8HwSupported() "+ MediaCodecVideoDecoder.isVp8HwSupported());
-                     Log.d(TAG,"MediaCodecVideoDecoder.isH264HwSupported() "+MediaCodecVideoDecoder.isH264HwSupported());
-                     Log.d(TAG,"MediaCodecVideoDecoder.isVp9HwSupported() "+MediaCodecVideoDecoder.isVp9HwSupported());
-                     Log.d(TAG,"MediaCodecVideoDecoder.isH264HighProfileHwSupported() "+MediaCodecVideoDecoder.isH264HighProfileHwSupported());
-                    video.addSink(frameChecker);
-                } else {
-                    Log.d(TAG, "frameChecker is null");
-                }
-            }
-            //we get audio track to control volume. TODO: Support multiple tracks
-            else if (consumer.getTrack() != null && consumer.getTrack().kind().indexOf("audio") >= 0) {
-                audioTrack = (AudioTrack) consumer.getTrack();
-
-                //test
-                audioTrack.setVolume(0.5);
-            }
-            // We are ready. Answer the protoo request so the server will
-            // resume this Consumer (which was paused for now if video).
-            handler.accept();
-
-            // If audio-only mode is enabled, pause it.
-            //if ("video".equals(consumer.getKind()) && mStore.getMe().getValue().isAudioOnly()) {
-            //  pauseConsumer(consumer);
-            // }
-        } catch (Exception e) {
-            e.printStackTrace();
-            logError("\"newConsumer\" request failed:", e);
-            //mStore.addNotify("error", "Error creating a Consumer: " + e.getMessage());
         }
     }
 
