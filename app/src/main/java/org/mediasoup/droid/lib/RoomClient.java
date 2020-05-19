@@ -280,6 +280,10 @@ public class RoomClient {
                     //test
                     audioTrack.setVolume(0.5);
                 }
+
+                // Tell media server to resume the Consumer which was paused
+                Ack ack = (Ack) args[args.length - 1];
+                ack.call();
             });
         }
     };
@@ -300,6 +304,7 @@ public class RoomClient {
                         mSocket = IO.socket(UrlFactory.getHOSTNAME(), opts);
                         mSocket.on("room-joined", onRoomJoined);
                         mSocket.on("room-error", onRoomError);
+                        mSocket.on("consumer-new", onConsumerNew);
                         mSocket.connect();
                     } catch (URISyntaxException e) {
                         Log.d(TAG, "socket.io " + e.getMessage());
@@ -637,8 +642,11 @@ public class RoomClient {
                                 obj.getString("iceCandidates"), obj.getString("dtlsParameters"));
 
 
-                mSocket.emit("media-ready", toJsonObject(mMediasoupDevice.getRtpCapabilities()));
-                mSocket.on("consumer-new", onConsumerNew);
+                // Tell media server that we're ready to consume media stream
+                JSONObject mediaData = new JSONObject();
+                JSONObject deviceRtpCapabilities = new JSONObject(mMediasoupDevice.getRtpCapabilities());
+                mediaData.put("rtpCapabilities", deviceRtpCapabilities);
+                mSocket.emit("media-ready", mediaData);
 
             } catch (MediasoupException | JSONException e) {
                 e.printStackTrace();
@@ -696,7 +704,17 @@ public class RoomClient {
                     } catch (JSONException e) {
                         e.printStackTrace();
                     }
-                    mSocket.emit("transport-connect", opt);
+                    mSocket.emit("transport-connect", opt,new Ack() {
+                        @Override
+                        public void call(Object... args) {
+                            String errMessage = (String) args[0];
+                            if (errMessage != null) {
+                                Log.e("media", errMessage);
+                            } else {
+                                Log.d("media", "Transport connected: " + transport.getId() + " [receive]");
+                            }
+                        }
+                    });
                 }
 
                 @Override
