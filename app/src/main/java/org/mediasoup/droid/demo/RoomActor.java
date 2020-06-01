@@ -149,7 +149,7 @@ public class RoomActor {
 
     //Unity interface
     private class RenderCallback implements VideoSink {
-        final private int MAX_BUFFER = 1;
+        final private int MAX_BUFFER = 2;
         RGBColor color = new RGBColor();
         private class RGBColor {
             public int r, g, b;
@@ -170,11 +170,20 @@ public class RoomActor {
 
         @Override
         public void onFrame(VideoFrame videoFrame) {
-            //Log.d("RenderCallback", "render frame getRotatedWidth" + videoFrame.getRotatedWidth());
-
+            Log.d("RenderCallback", "render frame getRotatedWidth" + videoFrame.getRotatedWidth() +" "+videoFrame.getTimestampNs());
+            //videoFrame.retain();
             //data prepare
             //extract frame data
-            if(queueY.size() < MAX_BUFFER) {
+//            int old2remove = queueY.size() -  MAX_BUFFER + 1;
+//           for(int i =0; i < old2remove;i++){
+//                Log.e("RenderCallback", "render frame consuming too slow " + old2remove);
+//                queueY.pop();
+//                queueU.pop();
+//                queueV.pop();
+//            }
+
+            if(queueY.size() < MAX_BUFFER)
+            {
                 VideoFrame.I420Buffer i420 = videoFrame.getBuffer().toI420();
                  ByteBuffer y = i420.getDataY();
                 ByteBuffer u = i420.getDataU();
@@ -198,9 +207,9 @@ public class RoomActor {
                     queueU.push(RoomActor.u);
                     queueV.push(RoomActor.v);
                 }
-            }
 
-            videoFrame.release();
+                videoFrame.release();
+            }
         }
     }
 

@@ -206,7 +206,7 @@ public class RoomClient {
                     Log.d(TAG, "onRoomJoined " + arg.toString());
                 try {
                     String rtpCapabilities = ((JSONObject) args[0]).getString("rtpCapabilities");
-                    mWorkHandler.post(() -> joinImpl(rtpCapabilities, null));
+                    joinImpl(rtpCapabilities, null);
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -228,7 +228,7 @@ public class RoomClient {
             });
         }
     };
-
+    VideoTrack videoTrack = null;
     private Emitter.Listener onConsumerNew = new Emitter.Listener() {
         @Override
         public void call(final Object... args) {
@@ -577,9 +577,9 @@ public class RoomClient {
                 //mStore.setMediaCapabilities(canSendMic, canSendCam);
                 if (canSendMic) {
                     Log.d(TAG, "canSendMic TRUE");
-                    mMainHandler.post(() -> {
+                    //mMainHandler.post(() -> {
                         enableMic();
-                    });
+                   // });
                 }
                 // mWorkHandler.post(this::enableCam);
             }
