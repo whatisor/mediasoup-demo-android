@@ -149,7 +149,7 @@ public class RoomActor {
 
     //Unity interface
     private class RenderCallback implements VideoSink {
-        final private int MAX_BUFFER = 2;
+        final private int MAX_BUFFER = 1;
         RGBColor color = new RGBColor();
         private class RGBColor {
             public int r, g, b;
@@ -170,7 +170,7 @@ public class RoomActor {
 
         @Override
         public void onFrame(VideoFrame videoFrame) {
-            Log.d("RenderCallback", "render frame getRotatedWidth" + videoFrame.getRotatedWidth() +" "+videoFrame.getTimestampNs());
+            //Log.d("RenderCallback", "render frame getRotatedWidth" + videoFrame.getRotatedWidth() +" "+videoFrame.getTimestampNs());
             //videoFrame.retain();
             //data prepare
             //extract frame data
