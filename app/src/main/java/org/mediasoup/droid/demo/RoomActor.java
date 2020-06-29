@@ -196,16 +196,16 @@ public class RoomActor {
 
                     if (RoomActor.y == null || RoomActor.y.length != y.remaining()) {
                         RoomActor.y = new byte[y.remaining()];
-                        RoomActor.u = new byte[u.remaining()];
-                        RoomActor.v = new byte[v.remaining()];
+                        RoomActor.u = new byte[u.remaining()+v.remaining()];
+                        //RoomActor.v = new byte[v.remaining()];
                     }
                     y.get(RoomActor.y);
-                    u.get(RoomActor.u);
-                    v.get(RoomActor.v);
+                    u.get(RoomActor.u,0,RoomActor.u.length/2);
+                    v.get(RoomActor.u,RoomActor.u.length/2,RoomActor.u.length/2);
 
                     queueY.push(RoomActor.y);
                     queueU.push(RoomActor.u);
-                    queueV.push(RoomActor.v);
+                    //queueV.push(RoomActor.v);
                 }
 
                 videoFrame.release();
