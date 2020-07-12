@@ -11,6 +11,7 @@ import android.os.HandlerThread;
 import android.os.Looper;
 import android.util.Base64;
 import android.util.Log;
+import android.view.Choreographer;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.WorkerThread;
@@ -26,17 +27,23 @@ import org.mediasoup.droid.Producer;
 import org.mediasoup.droid.RecvTransport;
 import org.mediasoup.droid.SendTransport;
 import org.mediasoup.droid.Transport;
+import org.mediasoup.droid.demo.RoomActor;
 import org.mediasoup.droid.lib.socket.WebSocketTransport;
 import org.protoojs.droid.Message;
 import org.protoojs.droid.ProtooException;
 import org.webrtc.AudioTrack;
 import org.webrtc.MediaCodecVideoDecoder;
+import org.webrtc.VideoFrame;
 import org.webrtc.VideoSink;
 import org.webrtc.VideoTrack;
 import org.webrtc.voiceengine.WebRtcAudioManager;
 
 import java.io.File;
 import java.net.URISyntaxException;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -101,7 +108,7 @@ public class RoomClient {
     private SharedPreferences mPreferences;
 
     //External rendering //FIXME private
-    public VideoSink frameChecker = null;
+    public static List<RenderCallback> onFrameListeners = new ArrayList<RenderCallback>();
 
     //Additional control for audio consumer
     private AudioTrack audioTrack = null;
@@ -232,7 +239,8 @@ public class RoomClient {
     private Emitter.Listener onConsumerNew = new Emitter.Listener() {
         @Override
         public void call(final Object... args) {
-            mWorkHandler.post(() -> {
+            //mWorkHandler.post(() ->
+            {
                 for (Object arg : args)
                     Log.d(TAG, "onConsumerNew " + arg.toString());
                 //id, producerId, kind, rtpParameters, appData
@@ -263,15 +271,10 @@ public class RoomClient {
                 if (consumer.getTrack() != null && consumer.getTrack().kind().indexOf("video") >= 0) {
                     Log.d(TAG, "onNewConsumer addSink " + consumer.getId());
                     VideoTrack video = (VideoTrack) consumer.getTrack();
-                    if (frameChecker != null) {
-                        Log.d(TAG, "MediaCodecVideoDecoder.isVp8HwSupported() " + MediaCodecVideoDecoder.isVp8HwSupported());
-                        Log.d(TAG, "MediaCodecVideoDecoder.isH264HwSupported() " + MediaCodecVideoDecoder.isH264HwSupported());
-                        Log.d(TAG, "MediaCodecVideoDecoder.isVp9HwSupported() " + MediaCodecVideoDecoder.isVp9HwSupported());
-                        Log.d(TAG, "MediaCodecVideoDecoder.isH264HighProfileHwSupported() " + MediaCodecVideoDecoder.isH264HighProfileHwSupported());
-                        video.addSink(frameChecker);
-                    } else {
-                        Log.d(TAG, "frameChecker is null");
-                    }
+                    RenderCallback listener = new RenderCallback();
+                    onFrameListeners.add(listener);
+                    listener.setUuid(consumer.getId());
+                    video.addSink(listener);
                 }
                 //we get audio track to control volume. TODO: Support multiple tracks
                 else if (consumer.getTrack() != null && consumer.getTrack().kind().indexOf("audio") >= 0) {
@@ -284,7 +287,8 @@ public class RoomClient {
                 // Tell media server to resume the Consumer which was paused
                 Ack ack = (Ack) args[args.length - 1];
                 ack.call();
-            });
+            }
+            //);
         }
     };
 
@@ -800,4 +804,115 @@ public class RoomClient {
             //mStore.addNotify("error", "Error resuming Consumer: " + e.getMessage());
         }
     }
+
+
+
+
+    //Unity interface
+    public class RenderCallback implements VideoSink {
+        public String getUuid() {
+            return uuid;
+        }
+
+        public void setUuid(String uuid) {
+            this.uuid = uuid;
+        }
+
+        private String uuid = "";
+        final private int MAX_BUFFER = 1;
+        public int width = 0, height = 0;
+        //static public byte[] currentFrame = new byte[width * height];
+        public byte[] currentFrameTmpY = null;// =  new byte[width * height];
+        public byte[] currentFrameTmpU = null;//=  new byte[width * height / 2];
+        public byte[] currentFrameTmpV = null;// =  new byte[width * height / 2];
+        public byte[] y = null, u = null, v = null;
+        public LinkedList<byte[]> queueY = new LinkedList<>();
+        public LinkedList<byte[]> queueU = new LinkedList<>();
+        public LinkedList<byte[]> queueV = new LinkedList<>();
+        public Object locker = new Object();
+
+
+        //public interface
+        public byte[] getY() {
+            currentFrameTmpY = queueY.pop();
+            return currentFrameTmpY;
+        }
+
+        public byte[] getU() {
+            currentFrameTmpU = queueU.pop();
+            return currentFrameTmpU;
+        }
+
+        public byte[] getV() {
+            currentFrameTmpV = queueV.pop();
+            return currentFrameTmpV;
+        }
+
+
+        public int getFrameWidth() {
+            return width;
+        }
+
+        public int getFrameHeight() {
+            return height;
+        }
+
+        //check if no more frame;
+        public boolean isNewFrame() {
+            return !queueY.isEmpty();
+        }
+
+        //DEPRECATED
+        RGBColor color = new RGBColor();
+
+        private class RGBColor {
+            public int r, g, b;
+
+            //webrtc use ITU-R BT.601 conversion
+            public void fromYUV(int y, int u, int v) {
+                // Convert YUV to RGB
+                r = (int) ((y - 16.0) * 255 / 219 + (v - 128.0) * 255 / 224 * 1.402);
+                g = (int) ((y - 16.0) * 255 / 219 - (u - 128.0) * 255 / 224 * 1.772 * 0.114 / 0.587 - (v - 128.0) * 255 / 224 * 1.402 * 0.299 / 0.587);
+                b = (int) ((y - 16.0) * 255 / 219 + (u - 128.0) * 255 / 224 * 1.772);
+
+                // Clamp RGB values to [0,255]
+                r = (r > 255) ? 255 : ((r < 0) ? 0 : r);
+                g = (g > 255) ? 255 : ((g < 0) ? 0 : g);
+                b = (b > 255) ? 255 : ((b < 0) ? 0 : b);
+            }
+        }
+
+        @Override
+        public void onFrame(VideoFrame videoFrame) {
+            //\\Log.d("RenderCallback", "render frame getRotatedWidth" + videoFrame.getRotatedWidth() +" "+videoFrame.getTimestampNs());
+            if (queueY.size() < MAX_BUFFER) {
+                VideoFrame.I420Buffer i420 = videoFrame.getBuffer().toI420();
+                ByteBuffer ybuf = i420.getDataY();
+                ByteBuffer ubuf = i420.getDataU();
+                ByteBuffer vbuf = i420.getDataV();
+                width = i420.getWidth();
+                height = i420.getHeight();
+                //synchronized (locker)
+                {
+                    //Log.d("RenderCallback", "render frame y " + y.remaining());
+
+                    if (y == null || y.length != ybuf.remaining()) {
+                        y = new byte[ybuf.remaining()];
+                        u = new byte[ubuf.remaining() + vbuf.remaining()];
+                        //RoomActor.v = new byte[v.remaining()];
+                    }
+                    ybuf.get(y);
+                    ubuf.get(u,0,u.length / 2);
+                    vbuf.get(u, u.length / 2, u.length / 2);
+
+                    queueY.push(y);
+                    queueU.push(u);
+                    //queueV.push(RoomActor.v);
+                }
+
+                videoFrame.release();
+            }
+        }
+    }
+
 }

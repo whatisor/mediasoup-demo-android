@@ -53,8 +53,8 @@ public class RoomActor {
             int currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
 
             Log.d(TAG, "Volume now " + currentVolume);
-            if(mRoomClient.getAudioTrack() != null){
-                float vol = currentVolume*1.0f/audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+            if (mRoomClient.getAudioTrack() != null) {
+                float vol = currentVolume * 1.0f / audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
                 Log.d(TAG, "Volume now " + vol);
                 mRoomClient.getAudioTrack().setVolume(vol);
             }
@@ -62,7 +62,7 @@ public class RoomActor {
     }
 
 
-    public RoomActor(Activity context,String roomID, int logLevel, boolean secured) {
+    public RoomActor(Activity context, String roomID, int logLevel, boolean secured) {
         this.context = context;
         this.secured = secured;
         Logger.setLogLevel(Logger.LogLevel.values()[logLevel]);
@@ -80,17 +80,17 @@ public class RoomActor {
 
         //additional control
         //volume
-        audioContentObserver = new AudioContentObserver(context,null);//mRoomClient.getmWorkHandler()
-        context.getApplicationContext().getContentResolver().registerContentObserver(android.provider.Settings.System.CONTENT_URI, true, audioContentObserver );
+        audioContentObserver = new AudioContentObserver(context, null);//mRoomClient.getmWorkHandler()
+        context.getApplicationContext().getContentResolver().registerContentObserver(android.provider.Settings.System.CONTENT_URI, true, audioContentObserver);
     }
 
     private void loadRoomConfig() {
         // Room initial config.
-       // mRoomId = "immertec";//preferences.getString("roomId", "");
+        // mRoomId = "immertec";//preferences.getString("roomId", "");
         mPeerId = "huong";
         mDisplayName = "huong";
         mForceH264 = false;
-        mForceVP9 =false;
+        mForceVP9 = false;
 
 
         // Room action config.
@@ -104,11 +104,11 @@ public class RoomActor {
     }
 
     private void initRoomClient() {
-        Log.d(TAG,"Room ID " + mRoomId);
+        Log.d(TAG, "Room ID " + mRoomId);
         mRoomClient =
                 new RoomClient(
-                        this.context,  mRoomId, mPeerId, mDisplayName, mForceH264, mForceVP9, mOptions,this.secured);
-        mRoomClient.frameChecker = new RenderCallback();
+                        this.context, mRoomId, mPeerId, mDisplayName, mForceH264, mForceVP9, mOptions, this.secured);
+        //mRoomClient.frameChecker = new RenderCallback();
     }
 
 
@@ -139,125 +139,35 @@ public class RoomActor {
         if (mRoomClient != null) {
 
             //remove volume change listener
-            if(audioContentObserver != null)
-            context.getApplicationContext().getContentResolver().unregisterContentObserver(audioContentObserver);
+            if (audioContentObserver != null)
+                context.getApplicationContext().getContentResolver().unregisterContentObserver(audioContentObserver);
             mRoomClient.close();
             mRoomClient.dispose();
         }
     }
-
-
-    //Unity interface
-    private class RenderCallback implements VideoSink {
-        final private int MAX_BUFFER = 1;
-        RGBColor color = new RGBColor();
-        private class RGBColor {
-            public int r, g, b;
-
-            //webrtc use ITU-R BT.601 conversion
-            public void fromYUV(int y, int u, int v) {
-                // Convert YUV to RGB
-                r = (int) ((y - 16.0) * 255 / 219 + (v - 128.0) * 255 / 224 * 1.402);
-                g = (int) ((y - 16.0) * 255 / 219 - (u - 128.0) * 255 / 224 * 1.772 * 0.114 / 0.587 - (v - 128.0) * 255 / 224 * 1.402 * 0.299 / 0.587);
-                b = (int) ((y - 16.0) * 255 / 219 + (u - 128.0) * 255 / 224 * 1.772);
-
-                // Clamp RGB values to [0,255]
-                r = (r > 255) ? 255 : ((r < 0) ? 0 : r);
-                g = (g > 255) ? 255 : ((g < 0) ? 0 : g);
-                b = (b > 255) ? 255 : ((b < 0) ? 0 : b);
-            }
-        }
-
-        @Override
-        public void onFrame(VideoFrame videoFrame) {
-            //Log.d("RenderCallback", "render frame getRotatedWidth" + videoFrame.getRotatedWidth() +" "+videoFrame.getTimestampNs());
-            //videoFrame.retain();
-            //data prepare
-            //extract frame data
-//            int old2remove = queueY.size() -  MAX_BUFFER + 1;
-//           for(int i =0; i < old2remove;i++){
-//                Log.e("RenderCallback", "render frame consuming too slow " + old2remove);
-//                queueY.pop();
-//                queueU.pop();
-//                queueV.pop();
-//            }
-
-            if(queueY.size() < MAX_BUFFER)
-            {
-                VideoFrame.I420Buffer i420 = videoFrame.getBuffer().toI420();
-                 ByteBuffer y = i420.getDataY();
-                ByteBuffer u = i420.getDataU();
-                ByteBuffer v = i420.getDataV();
-                RoomActor.width = i420.getWidth();
-                RoomActor.height = i420.getHeight();
-                //synchronized (locker)
-                {
-                    //Log.d("RenderCallback", "render frame y " + y.remaining());
-
-                    if (RoomActor.y == null || RoomActor.y.length != y.remaining()) {
-                        RoomActor.y = new byte[y.remaining()];
-                        RoomActor.u = new byte[u.remaining()+v.remaining()];
-                        //RoomActor.v = new byte[v.remaining()];
-                    }
-                    y.get(RoomActor.y);
-                    u.get(RoomActor.u,0,RoomActor.u.length/2);
-                    v.get(RoomActor.u,RoomActor.u.length/2,RoomActor.u.length/2);
-
-                    queueY.push(RoomActor.y);
-                    queueU.push(RoomActor.u);
-                    //queueV.push(RoomActor.v);
-                }
-
-                videoFrame.release();
-            }
-        }
-    }
-
-    static public int width = 0, height = 0;
-    //static public byte[] currentFrame = new byte[width * height];
-    static public byte[] currentFrameTmpY = null;// =  new byte[width * height];
-    static public byte[] currentFrameTmpU = null ;//=  new byte[width * height / 2];
-    static public byte[] currentFrameTmpV = null;// =  new byte[width * height / 2];
-    static public  byte[] y = null,u = null,v = null;
-    static public LinkedList<byte[]> queueY = new LinkedList<>();
-    static public LinkedList<byte[]> queueU = new LinkedList<>();
-    static public LinkedList<byte[]> queueV = new LinkedList<>();
-    static public Object locker = new Object();
-
-
-    //public interface
-    public static byte[] getY() {
-            currentFrameTmpY = queueY.pop();
-            return currentFrameTmpY;
-    }
-    public static byte[] getU() {
-        currentFrameTmpU = queueU.pop();
-        return currentFrameTmpU;
-    }
-
-    public static byte[] getV() {
-        currentFrameTmpV = queueV.pop();
-        return currentFrameTmpV;
-    }
-
-
-    public static int getFrameWidth() {
-        return RoomActor.width;
-    }
-
-    public static int getFrameHeight() {
-        return RoomActor.height;
-    }
-
-    //check if no more frame;
-    public static boolean isNewFrame() {
-        return ! queueY.isEmpty();
-    }
-
     //test
-
-    public void testMic(){
+    public void testMic() {
         mRoomClient.enableMicImpl();
+    }
+
+    public static boolean isNewFrame(int index){
+        return  RoomClient.onFrameListeners.get(index).isNewFrame();
+    }
+    public static int getCount(){
+        return  RoomClient.onFrameListeners.size();
+    }
+    public static int getFrameWidth(int index){
+        return  RoomClient.onFrameListeners.get(index).getFrameWidth();
+    }
+    public static int getFrameHeight(int index){
+        return  RoomClient.onFrameListeners.get(index).getFrameHeight();
+    }
+
+    public static byte[] getY(int index){
+        return  RoomClient.onFrameListeners.get(index).getY();
+    }
+    public static byte[] getU(int index){
+        return  RoomClient.onFrameListeners.get(index).getU();
     }
 
 }
